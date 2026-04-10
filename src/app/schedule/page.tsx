@@ -597,7 +597,7 @@ export default function SchedulePage() {
           payoutLessonsCount: Number(payoutLessonsCount),
           unitPrice: Number(unitPrice),
           teacherPayout: Number(teacherPayout),
-          status: String(status),
+          status: status as 'NORMAL' | 'LEAVE' | 'CANCELLED',
           remark: String(remark)
         };
         await updateLessonStatus(editingLessonId, payload);
@@ -618,7 +618,7 @@ export default function SchedulePage() {
             payoutLessonsCount: Number(payoutLessonsCount),
             unitPrice: Number(unitPrice),
             teacherPayout: Number(teacherPayout),
-            status: String(status),
+            status: status as 'NORMAL' | 'LEAVE' | 'CANCELLED',
             remark: String(remark),
             paymentMethod: 'UNPAID',
             accountSuffix: '',
