@@ -148,6 +148,7 @@ export default function SchedulePage() {
     payoutRate: 0.6, // 快取抽成比例以便動態計算
     recurringType: 'NONE' as 'NONE' | 'WEEK' | 'TWO_WEEKS',
     recurringCount: 4,
+    status: 'NORMAL' as 'NORMAL' | 'LEAVE' | 'CANCELLED',
     remark: ''
   });
 
@@ -350,7 +351,7 @@ export default function SchedulePage() {
     return layouts;
   };
 
-  const openBookingModal = async (roomIdx: number, timeString: string) => {
+  const openBookingModal = async (roomIdx: number, timeString: string, targetDate?: string) => {
     if (classrooms.length === 0) {
       alert("⚠️ 請先至資料庫建立至少一間教室！");
       return;
@@ -385,7 +386,7 @@ export default function SchedulePage() {
       studentIdx: 0,
       teacherIdx: 0,
       classroomIdx: roomIdx,
-      bookingDate: date,
+      bookingDate: targetDate || date,
       startTime: timeString,
       endTime: timeSlots[eIdx],
       courseName: defaultInstrument,
@@ -396,6 +397,7 @@ export default function SchedulePage() {
       payoutRate: initialPayoutRate,
       recurringType: 'NONE',
       recurringCount: 4,
+      status: 'NORMAL',
       remark: ''
     });
     setIsModalOpen(true);
@@ -423,6 +425,7 @@ export default function SchedulePage() {
       payoutRate: (lesson.teacherPayout && lesson.unitPrice) ? lesson.teacherPayout / (lesson.unitPrice * (lesson.payoutLessonsCount || 1)) : 0.6,
       recurringType: 'NONE',
       recurringCount: 1,
+      status: lesson.status || 'NORMAL',
       remark: lesson.remark || ''
     });
     setIsModalOpen(true);
@@ -545,7 +548,7 @@ export default function SchedulePage() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const { type, studentIdx, teacherIdx, classroomIdx, bookingDate, startTime, endTime, courseName, lessonsCount, payoutLessonsCount, unitPrice, teacherPayout, recurringType, recurringCount, remark } = formState;
+    const { type, studentIdx, teacherIdx, classroomIdx, bookingDate, startTime, endTime, courseName, lessonsCount, payoutLessonsCount, unitPrice, teacherPayout, recurringType, recurringCount, status, remark } = formState;
 
     if (startTime >= endTime) {
       alert("結束時間必須晚於開始時間！");
@@ -594,6 +597,7 @@ export default function SchedulePage() {
           payoutLessonsCount: Number(payoutLessonsCount),
           unitPrice: Number(unitPrice),
           teacherPayout: Number(teacherPayout),
+          status: String(status),
           remark: String(remark)
         };
         await updateLessonStatus(editingLessonId, payload);
@@ -614,6 +618,7 @@ export default function SchedulePage() {
             payoutLessonsCount: Number(payoutLessonsCount),
             unitPrice: Number(unitPrice),
             teacherPayout: Number(teacherPayout),
+            status: String(status),
             remark: String(remark),
             paymentMethod: 'UNPAID',
             accountSuffix: '',
@@ -803,7 +808,7 @@ export default function SchedulePage() {
                     <input type="file" ref={fileInputRef} onChange={handleImportExcel} hidden accept=".xlsx, .xls" />
 
                     <button onClick={() => {
-                      if (classrooms.length > 0) openBookingModal(0, '10:00');
+                      if (classrooms.length > 0) openBookingModal(0, '10:00', date);
                       else alert("⚠️ 請先建立教室！");
                     }} className="bg-[#4a4238] hover:bg-[#c4a484] text-white px-10 py-4 border border-white rounded-full text-base font-bold tracking-[0.2em] shadow-2xl hover:shadow-[0_20px_40px_rgba(196,164,132,0.4)] transition-all duration-300 hover:-translate-y-1 whitespace-nowrap">
                       + 新增預約
@@ -989,7 +994,7 @@ export default function SchedulePage() {
                               const relativeHours = (h - 8) + (m / 60);
                               return (
                                 <div key={time}
-                                  onClick={() => canEdit && openBookingModal(classrooms.indexOf(room), time)}
+                                  onClick={() => canEdit && openBookingModal(classrooms.indexOf(room), time, date)}
                                   className={`absolute w-full h-[60px] transition-all z-10 group/cell ${canEdit ? 'cursor-pointer hover:bg-[#c4a484]/20' : 'cursor-not-allowed'}`}
                                   style={{ top: `${relativeHours * 120}px` }}
                                 ></div>
@@ -1009,7 +1014,7 @@ export default function SchedulePage() {
                                   draggable={canEdit}
                                   onDragStart={(e) => handleDragStart(e, lesson)}
                                   onDragEnd={handleDragEnd}
-                                  className={`absolute left-1 right-1 rounded-2xl p-3 md:p-4 overflow-hidden hover:scale-[1.02] hover:z-30 hover:shadow-2xl transition-all cursor-grab active:cursor-grabbing flex flex-col z-20 group border-l-4 shadow-lg`}
+                                  className={`absolute left-1 right-1 rounded-2xl p-3 md:p-4 overflow-hidden hover:scale-[1.02] hover:z-30 hover:shadow-2xl transition-all cursor-grab active:cursor-grabbing flex flex-col z-20 group border-l-4 shadow-lg force-gpu`}
                                   style={{
                                     top: `${top + 3}px`,
                                     height: `${height - 6}px`,
@@ -1026,7 +1031,7 @@ export default function SchedulePage() {
                                     <span>{lesson.startTime} - {lesson.endTime}</span>
                                   </div>
 
-                                  <div className="absolute inset-0 bg-[#2a2018]/90 p-4 flex flex-col justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-40 border-2 border-white/20 rounded-2xl backdrop-blur-sm shadow-2xl">
+                                  <div className="absolute inset-0 bg-[#2a2018]/90 p-4 flex flex-col justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-40 border-2 border-white/20 rounded-2xl backdrop-blur-sm shadow-2xl force-gpu">
                                     <div className="text-[10px] font-black tracking-[0.2em] text-[#c4a484] mb-2 uppercase">預約詳情 DETAILS</div>
                                     <div className="space-y-2">
                                       <div className="flex items-center gap-2">
@@ -1083,7 +1088,7 @@ export default function SchedulePage() {
                                 const relativeHours = (h - 8) + (m / 60);
                                 return (
                                   <div key={time}
-                                    onClick={() => canEdit && openBookingModal(0, time)}
+                                    onClick={() => canEdit && openBookingModal(0, time, d)}
                                     className={`absolute w-full h-[60px] transition-all z-10 ${canEdit ? 'cursor-pointer hover:bg-[#c4a484]/20' : 'cursor-not-allowed'}`}
                                     style={{ top: `${relativeHours * 120}px` }}
                                   ></div>
@@ -1105,7 +1110,7 @@ export default function SchedulePage() {
                                     draggable={canEdit}
                                     onDragStart={(e) => handleDragStart(e, lesson)}
                                     onDragEnd={handleDragEnd}
-                                    className={`absolute rounded-xl p-2 md:p-3 overflow-hidden hover:scale-[1.02] hover:z-30 hover:shadow-2xl transition-all cursor-grab active:cursor-grabbing flex flex-col z-20 group border-l-4 shadow-md`}
+                                    className={`absolute rounded-xl p-2 md:p-3 overflow-hidden hover:scale-[1.02] hover:z-30 hover:shadow-2xl transition-all cursor-grab active:cursor-grabbing flex flex-col z-20 group border-l-4 shadow-md force-gpu`}
                                     style={{
                                       top: `${top + 2}px`,
                                       height: `${height - 4}px`,
@@ -1123,7 +1128,7 @@ export default function SchedulePage() {
                                       {lesson.startTime}
                                     </div>
 
-                                    <div className="absolute inset-0 p-2 flex flex-col justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-40 border border-white/20 rounded-xl backdrop-blur-md shadow-xl"
+                                    <div className="absolute inset-0 p-2 flex flex-col justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-40 border border-white/20 rounded-xl backdrop-blur-md shadow-xl force-gpu"
                                       style={{ backgroundColor: `${color.bg}f2` }}
                                     >
                                       <div className="text-[7px] font-black tracking-widest text-[#c4a484] mb-1 uppercase">課程詳情</div>
@@ -1351,6 +1356,14 @@ export default function SchedulePage() {
                       <div>
                         <label className="block text-[11px] font-black tracking-[0.2em] text-red-500 mb-2 uppercase">老師薪資發放 (鐘點) ($)</label>
                         <input type="number" name="teacherPayout" disabled={formState.type === 'RENTAL' || !canEdit} readOnly={!canEdit} value={formState.teacherPayout} onChange={handleFormChange} className={`w-full bg-gray-50 border-2 border-[#ece4d9] rounded-xl px-4 py-3 font-mono font-black text-sm text-red-500 disabled:opacity-30 ${!canEdit ? 'opacity-50' : ''}`} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black tracking-[0.2em] text-[#4a4238] mb-2 uppercase">課程狀態</label>
+                        <select name="status" value={formState.status} onChange={handleFormChange} className="w-full bg-white border-2 border-[#ece4d9] rounded-xl px-4 py-3 font-bold text-sm">
+                          <option value="NORMAL">✅ 正常上課</option>
+                          <option value="LEAVE">🔔 學生請假</option>
+                          <option value="CANCELLED">❌ 課程取消</option>
+                        </select>
                       </div>
                       <div>
                         <label className="block text-[11px] font-black tracking-[0.2em] text-[#4a4238] mb-2">備註</label>

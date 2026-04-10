@@ -12,9 +12,10 @@ export default function LedgerPage() {
   const canView = hasPermission('ledger', 'VIEW');
   const canEdit = hasPermission('ledger', 'EDIT');
 
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+   const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -82,6 +83,36 @@ export default function LedgerPage() {
     }
   };
 
+  const handleSignInAll = async () => {
+    const toSignIn = lessons.filter(l => !l.isSigned && !l.isSettled);
+    if (toSignIn.length === 0) {
+      alert('⚠️ 目前列表中的所有課程都已完成簽到。');
+      return;
+    }
+
+    if (!confirm(`確定要將目前列表中 ${toSignIn.length} 筆課程全部設為已簽到與結算嗎？\n這將自動執行學生扣款與教師計薪。`)) return;
+
+    setIsLoading(true);
+    let successCount = 0;
+    try {
+      for (const lesson of toSignIn) {
+        const updates: any = { isSigned: true, isSettled: true };
+        // 批次執行：更新狀態 + 執行財務結算 (針對 LESSON)
+        await updateLessonStatus(lesson.id!, updates);
+        if (lesson.type === 'LESSON') {
+          await settleLessonTransaction(lesson);
+        }
+        successCount++;
+      }
+      alert(`✅ 批次簽到完成！成功結算 ${successCount} 筆課程。`);
+    } catch (err: any) {
+      alert('❌ 批次結算過程中出錯：' + (err?.message || '請檢查網路連線'));
+    } finally {
+      await fetchData();
+      setIsLoading(false);
+    }
+  };
+
   const exportCurrentDay = () => {
     const dataToExport = lessons.map(l => ({
       '日期': date,
@@ -108,10 +139,59 @@ export default function LedgerPage() {
   const transferTotal = lessons.filter(l => l.paymentMethod === 'TRANSFER').reduce((acc, l) => acc + (l.unitPrice * l.lessonsCount), 0);
 
   // 日期前後切換
-  const shiftDate = (days: number) => {
+   const shiftDate = (days: number) => {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
     setDate(d.toISOString().split('T')[0]);
+    setSelectedIds(new Set()); // 切換日期時清空選擇
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      // 僅選取目前列表中「未結算」的項目
+      const unsettled = lessons.filter(l => !l.isSettled).map(l => l.id!);
+      setSelectedIds(new Set(unsettled));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleBatchSignIn = async () => {
+    if (selectedIds.size === 0) return;
+    
+    if (!confirm(`確定要將所選的 ${selectedIds.size} 筆課程全部設為已簽到並執行財務結算嗎？`)) return;
+
+    setIsLoading(true);
+    let successCount = 0;
+    try {
+      for (const id of Array.from(selectedIds)) {
+        const lesson = lessons.find(l => l.id === id);
+        if (lesson && !lesson.isSettled) {
+          const updates: any = { isSigned: true, isSettled: true };
+          await updateLessonStatus(id, updates);
+          if (lesson.type === 'LESSON') {
+            await settleLessonTransaction(lesson);
+          }
+          successCount++;
+        }
+      }
+      alert(`✅ 批次處理完成！已成功簽到並結算 ${successCount} 筆資料。`);
+      setSelectedIds(new Set());
+    } catch (err: any) {
+      alert('❌ 批次處裡發生錯誤：' + (err?.message || '未知錯誤'));
+    } finally {
+      await fetchData();
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -233,14 +313,49 @@ export default function LedgerPage() {
         </div>
 
         <div className="elegant-card w-full p-0 overflow-hidden border-2 border-emerald-500/20 shadow-sm mt-4">
-          <div className="bg-emerald-500/10 px-8 py-4 border-b border-emerald-500/20 flex justify-between">
-            <span className="font-black text-emerald-800 tracking-widest">貳、實收財務與簽到防呆確認</span>
-            <span className="text-xs text-emerald-600 font-bold">對應原始 EXCEL 綠色區塊</span>
+          <div className="bg-emerald-500/10 px-8 py-4 border-b border-emerald-500/20 flex justify-between items-center">
+            <div className="flex flex-col">
+              <span className="font-black text-emerald-800 tracking-widest">貳、實收財務與簽到防呆確認</span>
+              {selectedIds.size > 0 && (
+                <span className="text-[10px] font-bold text-indigo-600 animate-pulse mt-0.5">系統訊息：已選取 {selectedIds.size} 筆待處理資料</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+               {canEdit && (
+                 <>
+                   {selectedIds.size > 0 ? (
+                     <button 
+                       onClick={handleBatchSignIn}
+                       className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-black tracking-[0.1em] transition-all shadow-lg hover:shadow-indigo-200 active:scale-95 flex items-center gap-2 border-2 border-indigo-400"
+                     >
+                       <span>🚀 執行批次簽到 ({selectedIds.size})</span>
+                     </button>
+                   ) : (
+                     <button 
+                       onClick={handleSignInAll}
+                       className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl text-xs font-black tracking-[0.1em] transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2"
+                     >
+                       <span>✓ 全部簽到 (快速)</span>
+                     </button>
+                   )}
+                 </>
+               )}
+               <span className="text-xs text-emerald-600 font-bold hidden md:inline ml-2">對應原始 EXCEL 綠色區塊</span>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-center whitespace-nowrap text-sm">
               <thead className="bg-[#f8f7f2]">
                 <tr className="text-emerald-700/60 font-black tracking-widest border-b border-emerald-500/10">
+                  <th className="py-4 px-4 w-12">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                      checked={selectedIds.size > 0 && selectedIds.size === lessons.filter(l => !l.isSettled).length}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      title="全選未結算項目"
+                    />
+                  </th>
                   <th className="py-4 px-6 text-left">對象/項目</th>
                   <th className="py-4 px-4">繳費方式</th>
                   <th className="py-4 px-4 text-emerald-600">現金收款 (+)</th>
@@ -252,7 +367,16 @@ export default function LedgerPage() {
               </thead>
               <tbody className="font-bold text-[#4a4238] divide-y divide-emerald-500/5">
                 {lessons.map(l => (
-                  <tr key={l.id} className="hover:bg-emerald-50/30 transition-colors">
+                  <tr key={l.id} className={`hover:bg-emerald-50/30 transition-colors ${selectedIds.has(l.id!) ? 'bg-indigo-50/50' : ''}`}>
+                    <td className="py-5 px-4">
+                      <input 
+                        type="checkbox" 
+                        disabled={l.isSettled}
+                        checked={selectedIds.has(l.id!)}
+                        onChange={() => handleToggleSelect(l.id!)}
+                        className={`w-4 h-4 rounded accent-indigo-600 ${l.isSettled ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`}
+                      />
+                    </td>
                     <td className="py-5 px-6 text-left">
                        <span className="font-black">{l.studentName || '租借者'}</span>
                        <span className="text-[10px] opacity-40 ml-2">({l.courseName})</span>
@@ -292,7 +416,7 @@ export default function LedgerPage() {
                   </tr>
                 ))}
                 <tr className="bg-emerald-500/10 text-emerald-800 font-black">
-                   <td colSpan={2} className="py-5 px-6 text-right tracking-[1em]">實收分類合計</td>
+                   <td colSpan={3} className="py-5 px-6 text-right tracking-[1em]">實收分類合計</td>
                    <td className="py-5 px-4 font-mono text-emerald-700">{cashTotal.toLocaleString()}</td>
                    <td className="py-5 px-4 font-mono text-blue-700">{transferTotal.toLocaleString()}</td>
                    <td colSpan={3}></td>

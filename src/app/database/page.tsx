@@ -312,6 +312,7 @@ export default function DatabasePage() {
   const [editingItem, setEditingItem] = useState<any>(null);
   const [tempEnrollments, setTempEnrollments] = useState<StudentEnrollment[]>([]);
   const [currentLineBindings, setCurrentLineBindings] = useState<LineBinding[]>([]);
+  const [tempMobiles, setTempMobiles] = useState<string[]>([]);
   const [selectedColorIndex, setSelectedColorIndex] = useState<number>(-1);
 
   // 取得全學院現有的科目清單
@@ -369,6 +370,8 @@ export default function DatabasePage() {
     setEditingItem(null);
     if (activeTab === 'students') {
        setTempEnrollments([]);
+       setTempMobiles([]);
+       setCurrentLineBindings([]);
     }
     if (activeTab === 'teachers') {
        setSelectedColorIndex(-1);
@@ -385,6 +388,8 @@ export default function DatabasePage() {
          remainingLessons: e.remainingLessons || 0
        })) || []);
        
+       setTempMobiles(item.contact_mobiles || []);
+
        const bindings = await getStudentBindings(item.id);
        setCurrentLineBindings(bindings);
     }
@@ -505,6 +510,7 @@ export default function DatabasePage() {
           balance: totalBalance,
           remainingLessons: totalLessons,
           enrollments: parsedEnrollments,
+          contact_mobiles: tempMobiles,
         };
         if (editingItem) await updateUser(editingItem.id, payload);
         else await addUser(payload as Student);
@@ -902,6 +908,40 @@ export default function DatabasePage() {
                          </div>
                        ))}
                     </div>
+                  </div>
+
+                  {/* 授權 LINE 綁定電話管理 */}
+                  <div className="mt-4 bg-[#f8f7f2] p-6 rounded-2xl border border-[#ece4d9]">
+                    <div className="flex justify-between items-center mb-4">
+                       <label className="text-xs font-black tracking-widest text-[#4a4238]">📱 授權 LINE 綁定電話</label>
+                       <button 
+                         type="button" 
+                         onClick={() => setTempMobiles([...tempMobiles, ''])}
+                         className="text-[10px] font-black text-[#c4a484] bg-white border border-[#ece4d9] px-3 py-1 rounded-lg hover:shadow-md transition-all"
+                       >
+                         + 新增號碼
+                       </button>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                       {tempMobiles.length === 0 && <p className="text-[10px] text-[#4a4238]/40 italic">尚未設定授權號碼，目前無法進行 LINE 綁定。</p>}
+                       {tempMobiles.map((m, idx) => (
+                         <div key={idx} className="flex gap-2 items-center">
+                            <input 
+                              type="tel"
+                              value={m}
+                              onChange={(e) => {
+                                const newList = [...tempMobiles];
+                                newList[idx] = e.target.value;
+                                setTempMobiles(newList);
+                              }}
+                              placeholder="例如 09xxxxxxxx"
+                              className="flex-1 text-xs font-mono bg-white border border-[#ece4d9] rounded-lg px-3 py-2 focus:outline-none focus:border-[#c4a484]"
+                            />
+                            <button type="button" onClick={() => setTempMobiles(tempMobiles.filter((_, i) => i !== idx))} className="text-red-300 hover:text-red-500 font-bold px-2">✕</button>
+                         </div>
+                       ))}
+                    </div>
+                    <p className="text-[9px] text-[#c4a484] mt-3 font-bold uppercase tracking-tighter">※ 家長掃碼時輸入以上任一號碼即可通過驗證。</p>
                   </div>
 
                   {/* LINE 綁定管理區塊 */}

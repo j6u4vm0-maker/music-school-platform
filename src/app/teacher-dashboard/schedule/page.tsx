@@ -22,7 +22,7 @@ function LessonCard({ l, teachers }: { l: any, teachers: Teacher[] }) {
 
   return (
     <div 
-      className={`absolute left-1 right-1 p-3 rounded-2xl border-l-[6px] shadow-lg flex flex-col justify-center transition-all group overflow-hidden
+      className={`absolute left-1 right-1 p-3 rounded-2xl border-l-[6px] shadow-lg flex flex-col justify-center transition-all group overflow-hidden force-gpu
         ${isOthers 
           ? 'bg-white/40 backdrop-blur-md border-gray-300 opacity-60 grayscale-[0.5]' 
           : 'bg-white'}`}

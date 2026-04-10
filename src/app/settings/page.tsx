@@ -18,6 +18,11 @@ export default function SettingsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [lineSettings, setLineSettings] = useState({
+    line_channel_secret: '',
+    line_channel_access_token: '',
+    liff_id: '',
+  });
   
   const { hasPermission, profile } = useAuth();
   const router = useRouter();
@@ -31,6 +36,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (isAdmin) {
       fetchData();
+      fetchLineSettings();
     }
   }, [isAdmin]);
 
@@ -47,6 +53,16 @@ export default function SettingsPage() {
       console.error(e);
     }
     setIsLoading(false);
+  };
+
+  const fetchLineSettings = async () => {
+    try {
+      const res = await fetch('/api/settings/line');
+      const data = await res.json();
+      setLineSettings(data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleResetPassword = async (uid: string, email: string) => {
@@ -110,6 +126,34 @@ export default function SettingsPage() {
       
       setIsModalOpen(false);
       fetchData();
+    } catch (error: any) {
+      alert(`儲存失敗: ${error.message}`);
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleSaveLineSettings = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const form = new FormData(e.currentTarget);
+    const data = {
+      line_channel_secret: form.get('line_channel_secret'),
+      line_channel_access_token: form.get('line_channel_access_token'),
+      liff_id: form.get('liff_id'),
+    };
+
+    try {
+      const res = await fetch('/api/settings/line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        alert('✅ LINE 設定已更新並即時生效！');
+        fetchLineSettings();
+      } else {
+        throw new Error('更新失敗');
+      }
     } catch (error: any) {
       alert(`儲存失敗: ${error.message}`);
     }
@@ -250,6 +294,65 @@ export default function SettingsPage() {
                     <div className="text-3xl mb-3">☁️</div>
                     <h4 className="font-black text-[#4a4238] tracking-widest mb-1">雲端自動同步 (開發中)</h4>
                     <p className="text-[10px] text-[#4a4238]/40 font-bold uppercase">Cloud Sync Features</p>
+                 </div>
+              </div>
+
+              {/* LINE Configuration Card */}
+              <div className="w-full max-w-2xl mt-12 text-left">
+                 <div className="bg-white/80 backdrop-blur-md rounded-[40px] p-10 border-2 border-[#ece4d9] shadow-sm relative overflow-hidden">
+                   <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-bl-[100px] -z-10"></div>
+                   <h4 className="font-serif text-2xl font-black text-[#4a4238] tracking-widest mb-2 flex items-center gap-3">
+                      <span className="text-green-500">💬</span> LINE API 動態配置
+                   </h4>
+                   <p className="text-xs text-[#c4a484] font-bold mb-8 uppercase tracking-widest border-b border-[#ece4d9] pb-4">
+                      Messaging API & LIFF Dynamic Configuration
+                   </p>
+
+                   <form onSubmit={handleSaveLineSettings} className="flex flex-col gap-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                            <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">Channel Secret</label>
+                            <input 
+                              name="line_channel_secret" 
+                              defaultValue={lineSettings.line_channel_secret}
+                              placeholder="尚未設定"
+                              className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-xs focus:ring-2 focus:ring-green-400/20 outline-none transition-all" 
+                            />
+                         </div>
+                         <div>
+                            <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">LIFF ID</label>
+                            <input 
+                              name="liff_id" 
+                              defaultValue={lineSettings.liff_id}
+                              placeholder="尚未設定"
+                              className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-xs focus:ring-2 focus:ring-green-400/20 outline-none transition-all" 
+                            />
+                         </div>
+                      </div>
+                      <div>
+                         <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">Channel Access Token</label>
+                         <textarea 
+                           name="line_channel_access_token" 
+                           defaultValue={lineSettings.line_channel_access_token}
+                           placeholder="尚未設定 Long-lived access token"
+                           rows={3}
+                           className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-[10px] focus:ring-2 focus:ring-green-400/20 outline-none transition-all resize-none" 
+                         />
+                      </div>
+                      
+                      <div className="flex items-center justify-between bg-green-50 p-4 rounded-2xl border border-green-100">
+                         <p className="text-[10px] text-green-700 font-bold leading-relaxed pr-4">
+                            💡 提示：儲存後系統將自動清除伺服器快取，下一次調用訊息發送服務時即會採用新金鑰。
+                         </p>
+                         <button 
+                           type="submit" 
+                           disabled={isSubmitting || !canEdit}
+                           className="bg-green-500 hover:bg-green-600 text-white font-black tracking-widest py-3 px-8 rounded-xl shadow-lg transition-all disabled:opacity-40 whitespace-nowrap text-sm"
+                         >
+                           {isSubmitting ? '更新中...' : '儲存變更'}
+                         </button>
+                      </div>
+                   </form>
                  </div>
               </div>
             </div>

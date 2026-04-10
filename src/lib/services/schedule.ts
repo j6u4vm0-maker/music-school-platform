@@ -28,6 +28,7 @@ export interface Lesson {
   isPaid: boolean; // 入帳紀錄打勾
   isSigned: boolean; // 簽到表打勾
   isSettled?: boolean; // 收入與支出結算完畢
+  status?: 'NORMAL' | 'LEAVE' | 'CANCELLED'; // 課程狀態：正常, 請假, 取消
   remark: string; // 備註
 }
 

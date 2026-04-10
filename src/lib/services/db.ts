@@ -47,6 +47,7 @@ export interface Student extends UserProfile {
   parentName?: string;   // 緊急聯絡人姓名
   parentPhone?: string;  // 緊急聯絡人電話
   lineId?: string;       // LINE ID
+  contact_mobiles?: string[]; // 允許綁定的聯絡手機號碼陣列
 
   /** @deprecated 使用 enrollments 取代 */
   instrument?: string;

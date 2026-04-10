@@ -26,19 +26,29 @@ function BindForm() {
 
     setStatus('LOADING');
     try {
-      // 1. 執行綁定邏輯 (含聯動綁定)
-      const boundStudents = await bindLineAccount(lineUid, mobile, role);
-      
-      // 2. 發送歡迎訊息
-      const names = boundStudents.map(s => s.name);
-      const welcomeFlex = createWelcomeFlex(names);
-      await sendLineMessage(lineUid, welcomeFlex);
+      const response = await fetch('/api/line/bind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: studentId,
+          line_uid: lineUid,
+          input_mobile: mobile,
+          relationship: role,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || '綁定失敗');
+      }
 
       setStatus('SUCCESS');
-      setMsg(`綁定成功！已同步發送歡迎訊息至您的 LINE。`);
+      setMsg(`學員 ${data.student_name} 綁定成功！歡迎訊息已發送至您的 LINE。`);
     } catch (err: any) {
+      console.error(err);
       setStatus('ERROR');
-      setMsg(err.message || '綁定失敗，請檢查手機號碼。');
+      setMsg(err.message || '連線錯誤，請稍後再試。');
     }
   };
 
