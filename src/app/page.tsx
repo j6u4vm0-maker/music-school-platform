@@ -153,6 +153,20 @@ const modules = [
     permissionKey: 'finance',
   },
   {
+    href: '/inventory',
+    label: 'Inventory',
+    title: '進銷存與零售',
+    desc: '樂器、教材等商品庫存監控與帳本連動',
+    icon: (
+      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
+    accent: '#d97757',
+    bg: 'from-[#fcedea] to-[#f4dcd6]',
+    permissionKey: 'finance', // 利用與財務同樣的管理權限
+  },
+  {
     href: '/ledger',
     label: 'Ledger',
     title: '每日對帳單',

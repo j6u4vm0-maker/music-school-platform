@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { getLessonsByDate, getLessonsByDateRange, addLesson, checkConflict, updateLessonStatus, deleteLesson, Lesson } from '@/lib/services/schedule';
 import { getStudents, getTeachers, getClassrooms, Student, Teacher, Classroom } from '@/lib/services/db';
+import { getDailyClosingStatus, unsettleLessonTransaction, settleLessonTransaction } from '@/lib/services/finance';
 import { getPricing } from '@/lib/services/pricing';
 import { exportToExcel, importFromExcel } from '@/lib/utils/excel';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -58,7 +59,20 @@ export default function SchedulePage() {
     e.preventDefault();
     if (!canEdit || !draggedLesson) return;
 
-    const container = e.currentTarget as HTMLElement;
+    try {
+      const isSourceLocked = await getDailyClosingStatus(draggedLesson.date);
+      if (isSourceLocked) {
+        alert("🚫 原始日期已入帳鎖定，無法被移動。");
+        return;
+      }
+      const newDate = targetDate || draggedLesson.date;
+      const isTargetLocked = await getDailyClosingStatus(newDate);
+      if (isTargetLocked) {
+        alert("🚫 目標日期已入帳鎖定，移入失敗。");
+        return;
+      }
+
+      const container = e.currentTarget as HTMLElement;
     const rect = container.getBoundingClientRect();
     const offsetY = Math.max(0, e.clientY - rect.top);
 
@@ -433,11 +447,28 @@ export default function SchedulePage() {
 
   const handleDeleteLesson = async (e: React.MouseEvent, lessonId: string) => {
     e.stopPropagation();
+    const oldLesson = lessons.find(l => l.id === lessonId);
+    if (!oldLesson) return;
+    
     try {
+      const isLocked = await getDailyClosingStatus(oldLesson.date);
+      if (isLocked) {
+        alert("🚫 該日期已入帳鎖定，無法刪除預約！");
+        return;
+      }
+
+      if (oldLesson.isSettled) {
+        if (!confirm('⚠️ 此課已產生帳務細節，刪除將會同時沖銷相關的財務紀錄與學生堂數餘額。\n\n確定真的要刪除嗎？')) {
+          return;
+        }
+        await unsettleLessonTransaction(oldLesson);
+      }
+
       await deleteLesson(lessonId);
       fetchData();
     } catch (err) {
-      alert('刪除失敗，請檢查權限或網路狀態');
+      console.error(err);
+      alert('刪除或沖銷失敗，請檢查權限或網路狀態');
     }
   };
 
@@ -583,6 +614,25 @@ export default function SchedulePage() {
 
     try {
       if (editingLessonId) {
+        const oldLesson = lessons.find(l => l.id === editingLessonId);
+        
+        // 檢查目標日期或原始日期是否被鎖定
+        const originLocked = oldLesson ? await getDailyClosingStatus(oldLesson.date) : false;
+        const targetLocked = await getDailyClosingStatus(bookingDate);
+        if (originLocked || targetLocked) {
+           alert("🚫 該日期已入帳鎖定，無法修改預約！");
+           setIsSubmitting(false);
+           return;
+        }
+
+        if (oldLesson?.isSettled) {
+          if (!confirm('⚠️ 此課已產生帳務細節，修改將自動啟動以下機制：\n1. 沖銷原本的財務紀錄\n2. 歸還學生扣款堂數\n\n如果新的狀態仍正常上課，系統會再自動重新結算。\n\n確定要修改嗎？')) {
+            setIsSubmitting(false);
+            return;
+          }
+          await unsettleLessonTransaction(oldLesson);
+        }
+
         const payload = {
           type,
           studentId: student?.id || '',
@@ -601,8 +651,24 @@ export default function SchedulePage() {
           remark: String(remark)
         };
         await updateLessonStatus(editingLessonId, payload);
+
+        // 如果修改前是已結算，且修改後仍是正常課程，則自動重新結算
+        if (oldLesson?.isSettled) {
+          if (payload.status === 'NORMAL' && payload.type === 'LESSON') {
+             await settleLessonTransaction({ id: editingLessonId, ...payload } as Lesson);
+          } else {
+             await updateLessonStatus(editingLessonId, { isSigned: false, isSettled: false });
+          }
+        }
       } else {
-        // 批次新增
+        // 批次新增 (檢查所有目標日期是否被鎖定)
+        for (const d of datesToBook) {
+           if (await getDailyClosingStatus(d)) {
+              alert(`🚫 日期 ${d} 已入帳鎖定，無法新增預約至該日期！`);
+              setIsSubmitting(false);
+              return;
+           }
+        }
         for (const d of datesToBook) {
           const payload: any = {
             type,

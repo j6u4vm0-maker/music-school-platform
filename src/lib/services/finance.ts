@@ -17,6 +17,7 @@ import {
   orderBy,
   setDoc,
   getDoc,
+  where,
 } from 'firebase/firestore';
 
 export interface Transaction {
@@ -33,10 +34,12 @@ export interface Transaction {
   createdAt: number;
   teacherId?: string;
   instrument?: string;
+  refId?: string; // 用於關聯產生的課程(或租借)實體ID
 }
 
 const txCol = collection(db, 'transactions');
 const catCol = collection(db, 'categories');
+const closingCol = collection(db, 'daily_closings');
 
 // ── Transactions ─────────────────────────────────────────────
 
@@ -127,7 +130,8 @@ export const settleLessonTransaction = async (lesson: Lesson) => {
       description: `[薪資撥發] 教學: ${lesson.studentName} - ${lesson.courseName} (${lesson.lessonsCount} 堂)`,
       date: lesson.date,
       paymentMethod: 'CASH',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      refId: lesson.id
     } as any);
   }
 
@@ -142,8 +146,50 @@ export const settleLessonTransaction = async (lesson: Lesson) => {
     description: `[營收實現] ${lesson.teacherName} - ${lesson.courseName} (${lesson.lessonsCount} 堂)`,
     date: lesson.date,
     paymentMethod: 'CASH',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    refId: lesson.id
   } as any);
+};
+
+/**
+ * 沖銷課程帳務：將金額退回給學生，並刪除產生的營業/薪資財務紀錄 (依據 refId)
+ */
+export const unsettleLessonTransaction = async (lesson: Lesson) => {
+  if (!lesson.id || lesson.type !== 'LESSON') return;
+
+  const restoredLessonsCount = Number(lesson.lessonsCount) || 1;
+  const amountToRestore = lesson.unitPrice * restoredLessonsCount;
+
+  // 1. 退還專屬存錢筒堂數與金額
+  await updateStudentBalance(
+    lesson.studentId!, 
+    amountToRestore, // 加回帳面金額
+    restoredLessonsCount, // 加回堂數
+    lesson.teacherId, 
+    lesson.courseName
+  );
+
+  // 2. 找到依據 refId = lesson.id 產生的相關實行財務紀錄，並直接刪除 (沖銷)
+  const q = query(txCol, where("refId", "==", lesson.id));
+  const snap = await getDocs(q);
+  for (const docSnapshot of snap.docs) {
+    await deleteDoc(docSnapshot.ref);
+  }
+};
+
+// ── Daily Closings ──────────────────────────────────────────
+
+export const getDailyClosingStatus = async (dateStr: string): Promise<boolean> => {
+  const snap = await getDoc(doc(db, 'daily_closings', dateStr));
+  return snap.exists() ? snap.data().isClosed === true : false;
+};
+
+export const setDailyClosingStatus = async (dateStr: string, isClosed: boolean, userId: string) => {
+  await setDoc(doc(db, 'daily_closings', dateStr), {
+    isClosed,
+    updatedAt: Date.now(),
+    updatedBy: userId
+  }, { merge: true });
 };
 
 // ── Categories ────────────────────────────────────────────────

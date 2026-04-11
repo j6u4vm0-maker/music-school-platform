@@ -3,12 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getLessonsByDate, updateLessonStatus, Lesson } from '@/lib/services/schedule';
-import { settleLessonTransaction } from '@/lib/services/finance';
+import { getDailyClosingStatus, setDailyClosingStatus, settleLessonTransaction } from '@/lib/services/finance';
 import { downloadCSV } from '@/lib/utils/csv';
 import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function LedgerPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, profile } = useAuth();
   const canView = hasPermission('ledger', 'VIEW');
   const canEdit = hasPermission('ledger', 'EDIT');
 
@@ -16,6 +16,7 @@ export default function LedgerPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isLocked, setIsLocked] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -24,12 +25,17 @@ export default function LedgerPage() {
   const fetchData = async () => {
     setIsLoading(true);
     setLessons(await getLessonsByDate(date));
+    setIsLocked(await getDailyClosingStatus(date));
     setIsLoading(false);
   };
 
   const [isSettling, setIsSettling] = useState<string | null>(null);
 
   const handleUpdate = async (id: string, field: string, value: any) => {
+    if (isLocked) {
+      alert('🔒 本日帳務已入帳鎖定，無法進行任何修改。');
+      return;
+    }
     const lesson = lessons.find(l => l.id === id);
     if (!lesson) return;
 
@@ -84,6 +90,10 @@ export default function LedgerPage() {
   };
 
   const handleSignInAll = async () => {
+    if (isLocked) {
+      alert('🔒 本日帳務已入帳鎖定，無法進行批次簽到。');
+      return;
+    }
     const toSignIn = lessons.filter(l => !l.isSigned && !l.isSettled);
     if (toSignIn.length === 0) {
       alert('⚠️ 目前列表中的所有課程都已完成簽到。');
@@ -166,6 +176,10 @@ export default function LedgerPage() {
   };
 
   const handleBatchSignIn = async () => {
+    if (isLocked) {
+      alert('🔒 本日帳務已入帳鎖定，無法進行批次簽到。');
+      return;
+    }
     if (selectedIds.size === 0) return;
     
     if (!confirm(`確定要將所選的 ${selectedIds.size} 筆課程全部設為已簽到並執行財務結算嗎？`)) return;
@@ -191,6 +205,16 @@ export default function LedgerPage() {
     } finally {
       await fetchData();
       setIsLoading(false);
+    }
+  };
+
+  const handleToggleLock = async () => {
+    if (!confirm(isLocked ? `確定要解除 ${date} 的帳務鎖定嗎？` : `確定要將 ${date} 設為已入帳並鎖定嗎？\n鎖定後將無法進行任何修改。`)) return;
+    try {
+      await setDailyClosingStatus(date, !isLocked, profile?.uid || 'UNKNOWN');
+      setIsLocked(!isLocked);
+    } catch(err) {
+      alert('鎖定狀態變更失敗：請檢查網路。');
     }
   };
 
@@ -225,12 +249,21 @@ export default function LedgerPage() {
 
       <div className="w-full max-w-7xl px-4 z-10 flex flex-col gap-6">
         
-        <div className="flex bg-[#4a4238] rounded-2xl px-8 py-5 items-center justify-between text-white shadow-xl">
+        <div className="flex flex-col md:flex-row bg-[#4a4238] rounded-2xl px-8 py-5 items-center justify-between text-white shadow-xl gap-4">
            <div className="flex items-center gap-4">
-             <div className="w-3 h-3 rounded-full bg-[#c4a484] animate-pulse"></div>
-             <h2 className="font-bold text-xl tracking-[0.3em] uppercase">{date} 營運結算總表</h2>
+             <div className={`w-3 h-3 rounded-full ${isLocked ? 'bg-red-500' : 'bg-[#c4a484] animate-pulse'}`}></div>
+             <h2 className="font-bold text-xl tracking-[0.3em] uppercase">{date} 營運結算總表 {isLocked && '🔒'}</h2>
            </div>
-           <div className="flex items-center gap-3">
+           <div className="flex items-center gap-4">
+             {canEdit && (
+               <button 
+                 onClick={handleToggleLock}
+                 className={`px-4 py-2 rounded-lg text-xs font-bold tracking-widest border transition-all ${isLocked ? 'bg-white/20 border-white hover:bg-white hover:text-rose-600 text-white shadow-inner' : 'bg-rose-500/20 border-rose-500/50 hover:bg-rose-500 text-white'}`}
+               >
+                 {isLocked ? '🔓 解除鎖定，允許修改' : '🔒 設定今日入帳'}
+               </button>
+             )}
+             <div className="flex items-center gap-3">
              <button
                onClick={() => shiftDate(-1)}
                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/25 flex items-center justify-center text-xl font-bold transition-all hover:scale-110 active:scale-95"
@@ -295,7 +328,7 @@ export default function LedgerPage() {
                     <td className="py-4 px-4 text-red-400 font-mono">-{l.teacherPayout.toLocaleString()}</td>
                     <td className="py-4 px-4 text-blue-800 font-mono">{(l.unitPrice * l.lessonsCount).toLocaleString()}</td>
                     <td className="py-4 px-4">
-                      <input type="text" placeholder="..." disabled={!canEdit} className="w-full bg-transparent border-b border-transparent group-hover:border-[#c4a484]/30 outline-none text-center transition-all disabled:opacity-40" value={l.remark || ''} onChange={e => handleUpdate(l.id!, 'remark', e.target.value)} />
+                      <input type="text" placeholder="..." disabled={!canEdit || isLocked} className="w-full bg-transparent border-b border-transparent group-hover:border-[#c4a484]/30 outline-none text-center transition-all disabled:opacity-40" value={l.remark || ''} onChange={e => handleUpdate(l.id!, 'remark', e.target.value)} />
                     </td>
                   </tr>
                 ))}
@@ -371,7 +404,7 @@ export default function LedgerPage() {
                     <td className="py-5 px-4">
                       <input 
                         type="checkbox" 
-                        disabled={l.isSettled}
+                        disabled={l.isSettled || isLocked}
                         checked={selectedIds.has(l.id!)}
                         onChange={() => handleToggleSelect(l.id!)}
                         className={`w-4 h-4 rounded accent-indigo-600 ${l.isSettled ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -382,7 +415,7 @@ export default function LedgerPage() {
                        <span className="text-[10px] opacity-40 ml-2">({l.courseName})</span>
                     </td>
                     <td className="py-5 px-4">
-                      <select value={l.paymentMethod} disabled={!canEdit} onChange={e => handleUpdate(l.id!, 'paymentMethod', e.target.value)} className="bg-white border-2 border-emerald-100 rounded-lg px-2 py-1 outline-none font-bold text-xs uppercase disabled:opacity-50">
+                      <select value={l.paymentMethod} disabled={!canEdit || isLocked} onChange={e => handleUpdate(l.id!, 'paymentMethod', e.target.value)} className="bg-white border-2 border-emerald-100 rounded-lg px-2 py-1 outline-none font-bold text-xs uppercase disabled:opacity-50">
                         <option value="UNPAID">尚未收費</option>
                         <option value="CASH">現金</option>
                         <option value="TRANSFER">匯款</option>
@@ -391,17 +424,17 @@ export default function LedgerPage() {
                     <td className="py-5 px-4 font-mono text-emerald-600">{l.paymentMethod === 'CASH' ? (l.unitPrice * l.lessonsCount).toLocaleString() : '0'}</td>
                     <td className="py-5 px-4 font-mono text-blue-600">{l.paymentMethod === 'TRANSFER' ? (l.unitPrice * l.lessonsCount).toLocaleString() : '0'}</td>
                     <td className="py-5 px-4">
-                       <input type="text" placeholder="..." value={l.accountSuffix || ''} onChange={e => handleUpdate(l.id!, 'accountSuffix', e.target.value)} disabled={!canEdit || l.paymentMethod !== 'TRANSFER'} className="w-16 text-center border-b border-emerald-200 bg-transparent disabled:opacity-20 outline-none focus:border-emerald-500" />
+                       <input type="text" placeholder="..." value={l.accountSuffix || ''} onChange={e => handleUpdate(l.id!, 'accountSuffix', e.target.value)} disabled={!canEdit || l.paymentMethod !== 'TRANSFER' || isLocked} className="w-16 text-center border-b border-emerald-200 bg-transparent disabled:opacity-20 outline-none focus:border-emerald-500" />
                     </td>
                     <td className="py-5 px-4">
-                       <button onClick={() => canEdit && handleUpdate(l.id!, 'isPaid', !l.isPaid)} className={`w-20 py-1 rounded-full text-[10px] border-2 transition-all ${l.isPaid ? 'bg-red-500 border-red-500 text-white shadow-md' : 'border-red-100 text-red-200 font-black'} ${!canEdit ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                       <button onClick={() => canEdit && handleUpdate(l.id!, 'isPaid', !l.isPaid)} disabled={isLocked || !canEdit} className={`w-20 py-1 rounded-full text-[10px] border-2 transition-all ${l.isPaid ? 'bg-red-500 border-red-500 text-white shadow-md' : 'border-red-100 text-red-200 font-black'} ${(!canEdit || isLocked) ? 'opacity-30 cursor-not-allowed' : ''}`}>
                           {l.isPaid ? 'TRUE' : 'FALSE'}
                        </button>
                     </td>
                     <td className="py-5 px-4 relative">
                        <button
                          onClick={() => canEdit && !l.isSettled && handleUpdate(l.id!, 'isSigned', !l.isSigned)}
-                         disabled={!canEdit || l.isSettled || isSettling === l.id}
+                         disabled={!canEdit || l.isSettled || isSettling === l.id || isLocked}
                          className={`w-20 py-1 rounded-full text-[10px] border-2 transition-all ${
                            l.isSettled ? 'bg-gray-200 border-gray-200 text-gray-400 cursor-not-allowed opacity-60' :
                            isSettling === l.id ? 'bg-indigo-200 border-indigo-200 text-indigo-500 cursor-wait' :

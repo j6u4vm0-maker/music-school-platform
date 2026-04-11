@@ -10,7 +10,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { logout } from '@/lib/services/auth';
 import { useRouter } from 'next/navigation';
 import { getPricing, getTeacherPricingList, calculatePackagePrice, TeacherInstrumentPricing } from '@/lib/services/pricing';
-import { getMonthTeacherStats } from '@/lib/services/schedule';
+import { getMonthTeacherStats, getLessonsByMonth, Lesson } from '@/lib/services/schedule';
 
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -26,11 +26,15 @@ export default function FinancePage() {
   const [filterRange, setFilterRange] = useState<'ALL' | 'WEEK' | 'MONTH'>('ALL');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
 
   // Analytics State
   const [viewMode, setViewMode] = useState<'LIST' | 'ANALYTICS'>('LIST');
   const [analyticsMonth, setAnalyticsMonth] = useState<string>(new Date().toISOString().substring(0, 7)); // 'YYYY-MM'
   const [monthAccruedStats, setMonthAccruedStats] = useState<Record<string, { totalPayout: number; lessonCount: number }>>({});
+  const [monthLessons, setMonthLessons] = useState<any[]>([]);
+  const [selectedTeacherDetail, setSelectedTeacherDetail] = useState<{ id: string, name: string, type: 'ACCRUED' | 'PAID' } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -63,6 +67,9 @@ export default function FinancePage() {
       
       const accrued = await getMonthTeacherStats(analyticsMonth);
       setMonthAccruedStats(accrued);
+
+      const mLessons = await getLessonsByMonth(analyticsMonth);
+      setMonthLessons(mLessons);
 
       setCategories(await getCategories());
       if (students.length === 0) {
@@ -217,6 +224,18 @@ export default function FinancePage() {
         return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
     }
     return true;
+  })
+  .filter(t => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const category = (t.category || (t.type === 'TOP_UP' ? '課程營收' : '一般項目')).toLowerCase();
+    const userName = (t.userName || '').toLowerCase();
+    const description = (t.description || '').toLowerCase();
+    return category.includes(q) || userName.includes(q) || description.includes(q);
+  })
+  .sort((a, b) => {
+    if (sortOrder === 'ASC') return a.date.localeCompare(b.date);
+    return b.date.localeCompare(a.date);
   });
 
   const teacherStats = teachers.map(teacher => {
@@ -455,19 +474,28 @@ export default function FinancePage() {
                 
                 if (accrued.totalPayout === 0 && paid === 0) return null;
 
+                const isSelectedAccrued = selectedTeacherDetail?.id === teacher.id && selectedTeacherDetail?.type === 'ACCRUED';
+                const isSelectedPaid = selectedTeacherDetail?.id === teacher.id && selectedTeacherDetail?.type === 'PAID';
+
                 return (
-                  <div key={teacher.id} className="bg-white p-5 rounded-2xl border-2 border-[#ece4d9] shadow-sm flex flex-col gap-3 group hover:border-[#c4a484] transition-all">
+                  <div key={teacher.id} className="bg-white p-5 rounded-2xl border-2 border-[#ece4d9] shadow-sm flex flex-col gap-3 group hover:border-[#c4a484] transition-all relative overflow-hidden">
                     <div className="flex justify-between items-center">
                        <span className="font-black text-[#4a4238]">{teacher.name}</span>
                        <span className="text-[10px] bg-[#ece4d9] px-2 py-0.5 rounded-full font-bold">已教 {accrued.lessonCount} 堂</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-center border-t border-[#ece4d9] pt-3">
-                       <div>
-                          <p className="text-[9px] font-black text-[#c4a484] tracking-widest uppercase">應付薪資</p>
+                       <div 
+                         onClick={() => setSelectedTeacherDetail({ id: teacher.id!, name: teacher.name, type: 'ACCRUED' })}
+                         className={`cursor-pointer p-2 rounded-xl transition-all ${isSelectedAccrued ? 'bg-[#c4a484]/10 ring-2 ring-[#c4a484]' : 'hover:bg-gray-50'}`}
+                       >
+                          <p className={`text-[9px] font-black tracking-widest uppercase ${isSelectedAccrued ? 'text-[#c4a484]' : 'text-[#c4a484]/70'}`}>應付薪資</p>
                           <p className="font-mono font-black text-sm text-[#4a4238]">${accrued.totalPayout.toLocaleString()}</p>
                        </div>
-                       <div className="border-l border-[#ece4d9]">
-                          <p className="text-[9px] font-black text-emerald-500/70 tracking-widest uppercase">已發薪資</p>
+                       <div 
+                         onClick={() => setSelectedTeacherDetail({ id: teacher.id!, name: teacher.name, type: 'PAID' })}
+                         className={`border-l border-[#ece4d9] cursor-pointer p-2 rounded-xl transition-all ${isSelectedPaid ? 'bg-emerald-50 ring-2 ring-emerald-500' : 'hover:bg-gray-50'}`}
+                       >
+                          <p className={`text-[9px] font-black tracking-widest uppercase ${isSelectedPaid ? 'text-emerald-500' : 'text-emerald-500/70'}`}>已發薪資</p>
                           <p className="font-mono font-black text-sm text-[#4a4238]">${paid.toLocaleString()}</p>
                        </div>
                     </div>
@@ -485,6 +513,99 @@ export default function FinancePage() {
                 );
               })}
            </div>
+
+           {/* Teacher Detail Breakdown List */}
+           {selectedTeacherDetail && (
+             <div className="mt-8 bg-white/80 backdrop-blur-md rounded-[30px] p-8 border-2 border-[#c4a484] shadow-xl animate-in slide-in-from-top duration-300">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h5 className="font-black text-xl text-[#4a4238] tracking-widest">
+                      {selectedTeacherDetail.name} 老師 - 
+                      <span className={selectedTeacherDetail.type === 'ACCRUED' ? 'text-[#c4a484]' : 'text-emerald-600'}>
+                        {selectedTeacherDetail.type === 'ACCRUED' ? ' 應付明細 (排課紀錄)' : ' 已發明細 (財務撥款)'}
+                      </span>
+                    </h5>
+                    <p className="text-xs text-[#4a4238]/40 font-bold mt-1 uppercase tracking-widest">
+                      Month: {analyticsMonth} | {selectedTeacherDetail.type === 'ACCRUED' ? 'Accrued Breakdown' : 'Payout Records'}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedTeacherDetail(null)}
+                    className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-[#4a4238] flex items-center justify-center font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  {selectedTeacherDetail.type === 'ACCRUED' ? (
+                    <table className="w-full text-left">
+                      <thead className="bg-gray-50 border-b-2 border-gray-100 text-[10px] font-black text-gray-400 tracking-widest uppercase">
+                        <tr>
+                          <th className="py-4 px-6">教學日期</th>
+                          <th className="py-4 px-6">學生姓名</th>
+                          <th className="py-4 px-6">課程內容</th>
+                          <th className="py-4 px-6">堂數 (計薪)</th>
+                          <th className="py-4 px-6">鐘點單價</th>
+                          <th className="py-4 px-6 text-right">小計薪資</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {monthLessons
+                          .filter(l => l.teacherId === selectedTeacherDetail.id && l.status !== 'CANCELLED')
+                          .sort((a,b) => a.date.localeCompare(b.date))
+                          .map((l, i) => (
+                            <tr key={i} className="hover:bg-gray-50 transition-colors">
+                              <td className="py-4 px-6 font-mono text-xs font-bold text-gray-500">{l.date}</td>
+                              <td className="py-4 px-6 font-black text-gray-700">{l.studentName}</td>
+                              <td className="py-4 px-6">
+                                <span className="bg-[#ece4d9] px-2 py-0.5 rounded-lg text-[10px] font-bold text-[#4a4238]">{l.courseName}</span>
+                              </td>
+                              <td className="py-4 px-6 font-bold">{l.payoutLessonsCount || l.lessonsCount || 1} 堂</td>
+                              <td className="py-4 px-6 font-mono text-xs">${(l.teacherPayout / (l.payoutLessonsCount || l.lessonsCount || 1)).toLocaleString()}</td>
+                              <td className="py-4 px-6 text-right font-mono font-black text-[#c4a484]">${l.teacherPayout?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        {monthLessons.filter(l => l.teacherId === selectedTeacherDetail.id && l.status !== 'CANCELLED').length === 0 && (
+                          <tr><td colSpan={6} className="py-10 text-center text-gray-300 font-bold">本月尚無排課紀錄</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="w-full text-left">
+                      <thead className="bg-emerald-50 border-b-2 border-emerald-100 text-[10px] font-black text-emerald-800/40 tracking-widest uppercase">
+                        <tr>
+                          <th className="py-4 px-6">發放日期</th>
+                          <th className="py-4 px-6">備註說明</th>
+                          <th className="py-4 px-6">支付方式</th>
+                          <th className="py-4 px-6 text-right">發放金額</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-emerald-50/50">
+                        {transactions
+                          .filter(t => t.userId === selectedTeacherDetail.id && t.type === 'TEACHER_PAYOUT' && t.date.startsWith(analyticsMonth))
+                          .sort((a,b) => b.date.localeCompare(a.date))
+                          .map((t, i) => (
+                            <tr key={i} className="hover:bg-emerald-50/20 transition-colors">
+                              <td className="py-4 px-6 font-mono text-xs font-bold text-emerald-700/60">{t.date}</td>
+                              <td className="py-4 px-6 font-bold text-gray-700">{t.description}</td>
+                              <td className="py-4 px-6">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full ${t.paymentMethod === 'TRANSFER' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                                  {t.paymentMethod === 'CASH' ? '現金' : `匯款 (${t.accountSuffix || '----'})`}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6 text-right font-mono font-black text-emerald-600">${Math.abs(t.amount).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        {transactions.filter(t => t.userId === selectedTeacherDetail.id && t.type === 'TEACHER_PAYOUT' && t.date.startsWith(analyticsMonth)).length === 0 && (
+                          <tr><td colSpan={4} className="py-10 text-center text-gray-300 font-bold">本月尚未有撥款紀錄</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+             </div>
+           )}
         </div>
 
         <div className="elegant-card w-full p-8 md:p-12 min-h-[50vh] flex flex-col relative overflow-hidden">
@@ -563,6 +684,19 @@ export default function FinancePage() {
                  />
               </div>
             )}
+            
+            {viewMode === 'LIST' && (
+              <div className="relative w-full md:w-64">
+                <input 
+                  type="text"
+                  placeholder="搜尋科目、對象或備註..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white/50 border-2 border-[#ece4d9] rounded-2xl px-5 py-3 pr-10 text-sm font-bold focus:outline-none focus:border-[#c4a484] transition-all"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 opacity-30 text-lg">🔍</span>
+              </div>
+            )}
           </div>
 
           {viewMode === 'LIST' ? (
@@ -580,7 +714,15 @@ export default function FinancePage() {
                   <table className="w-full text-left font-sans text-[#4a4238]/90">
                     <thead className="bg-[#ece4d9]/50 text-[#4a4238] border-b-2 border-[#ece4d9] uppercase tracking-widest text-xs font-black">
                       <tr>
-                        <th className="py-5 px-8">日期</th>
+                        <th 
+                          className="py-5 px-8 cursor-pointer hover:bg-[#ece4d9] transition-colors group select-none"
+                          onClick={() => setSortOrder(prev => prev === 'ASC' ? 'DESC' : 'ASC')}
+                        >
+                          日期 
+                          <span className="ml-2 font-mono text-[#c4a484]">
+                            {sortOrder === 'ASC' ? '↑' : '↓'}
+                          </span>
+                        </th>
                         <th className="py-5 px-8">會計科目</th>
                         <th className="py-5 px-8">交易對象</th>
                         <th className="py-5 px-8">備註</th>

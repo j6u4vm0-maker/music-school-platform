@@ -13,4 +13,5 @@ export const SYSTEM_MODULES: SystemModule[] = [
   { id: 'portal', name: '我的老師課表 (PORTAL)', icon: '📱' },
   { id: 'settings', name: '系統設定管理', icon: '⚙️' },
   { id: 'ledger', name: '每日對帳單', icon: '📊' },
+  { id: 'inventory', name: '進銷存管理', icon: '📦' },
 ];
