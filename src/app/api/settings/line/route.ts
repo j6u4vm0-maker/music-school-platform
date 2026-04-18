@@ -32,6 +32,10 @@ export async function GET() {
       line_channel_secret: maskSecret(data.line_channel_secret),
       line_channel_access_token: maskSecret(data.line_channel_access_token),
       liff_id: data.liff_id || '',
+      reminder_enabled: data.reminder_enabled || false,
+      reminder_time: data.reminder_time || '20:00',
+      reminder_mode: data.reminder_mode || 'DAY_BEFORE',
+      teacher_reminder_enabled: data.teacher_reminder_enabled || false,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -42,7 +46,15 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { line_channel_secret, line_channel_access_token, liff_id } = body;
+    const { 
+      line_channel_secret, 
+      line_channel_access_token, 
+      liff_id,
+      reminder_enabled,
+      reminder_time,
+      reminder_mode,
+      teacher_reminder_enabled
+    } = body;
 
     const docRef = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
     
@@ -54,6 +66,10 @@ export async function POST(request: Request) {
       line_channel_secret: line_channel_secret?.includes('***') ? oldData.line_channel_secret : line_channel_secret,
       line_channel_access_token: line_channel_access_token?.includes('***') ? oldData.line_channel_access_token : line_channel_access_token,
       liff_id: liff_id || '',
+      reminder_enabled: reminder_enabled ?? oldData.reminder_enabled ?? false,
+      reminder_time: reminder_time || oldData.reminder_time || '20:00',
+      reminder_mode: reminder_mode || oldData.reminder_mode || 'DAY_BEFORE',
+      teacher_reminder_enabled: teacher_reminder_enabled ?? oldData.teacher_reminder_enabled ?? false,
       updatedAt: Date.now(),
     };
 

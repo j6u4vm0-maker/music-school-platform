@@ -212,7 +212,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col bg-[#f8f7f2] relative overflow-hidden">
+    <main className="min-h-screen flex flex-col bg-[#f8f7f2] relative overflow-hidden animate-fade-in">
       {/* Ambient background */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none -z-10">
         <div className="absolute top-[-15%] right-[-5%] w-[45vw] h-[45vw] rounded-full bg-[#ece4d9] blur-[140px] opacity-60" />

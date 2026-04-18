@@ -4,74 +4,37 @@
 // finance.ts — Firestore: transactions, categories
 // ============================================================
 
-import { db } from '../firebase';
-import { Lesson } from './schedule';
-import {
-  collection,
-  addDoc,
-  getDocs,
-  doc,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy,
-  setDoc,
-  getDoc,
-  where,
-} from 'firebase/firestore';
-
-export interface Transaction {
-  id?: string;
-  userId: string;
-  userName: string;
-  type: 'TOP_UP' | 'LESSON_FEE' | 'TEACHER_PAYOUT' | 'EXPENSE' | 'SALES' | 'RENTAL' | 'OTHER_INCOME';
-  amount: number;
-  description: string;
-  category?: string;
-  paymentMethod?: 'CASH' | 'TRANSFER';
-  accountSuffix?: string;
-  date: string;
-  createdAt: number;
-  teacherId?: string;
-  instrument?: string;
-  refId?: string; // 用於關聯產生的課程(或租借)實體ID
-}
-
-const txCol = collection(db, 'transactions');
-const catCol = collection(db, 'categories');
-const closingCol = collection(db, 'daily_closings');
+import { Lesson } from '../types/lesson';
+import { Transaction } from '../types/finance';
+import { FinanceRepository } from '../repositories/financeRepository';
 
 // ── Transactions ─────────────────────────────────────────────
 
 export const addTransaction = async (transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
-  const docRef = await addDoc(txCol, {
+  return await FinanceRepository.addTransaction({
     ...transaction,
     createdAt: Date.now(),
   });
-  return docRef.id;
 };
 
 export const getTransactions = async (): Promise<Transaction[]> => {
-  const q = query(txCol, orderBy('createdAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+  return await FinanceRepository.getTransactions();
 };
 
 export const updateTransaction = async (id: string, transaction: Partial<Transaction>) => {
-  await updateDoc(doc(db, 'transactions', id), transaction as any);
+  await FinanceRepository.updateTransaction(id, transaction);
 };
 
 export const deleteTransaction = async (id: string) => {
-  await deleteDoc(doc(db, 'transactions', id));
+  await FinanceRepository.deleteTransaction(id);
 };
 
 // ── Student Balance ───────────────────────────────────────────
 
 export const updateStudentBalance = async (studentId: string, amountChange: number, lessonsChange: number, teacherId?: string, instrument?: string) => {
-  const ref = doc(db, 'students', studentId);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const data = snap.data();
+  const result = await FinanceRepository.getStudentDoc(studentId);
+  if (result) {
+    const { ref, data } = result;
     let updated = false;
 
     if (teacherId && instrument && data.enrollments) {
@@ -88,13 +51,13 @@ export const updateStudentBalance = async (studentId: string, amountChange: numb
       });
 
       if (updated) {
-        await updateDoc(ref, { enrollments });
+        await FinanceRepository.updateStudentDoc(ref, { enrollments });
         return;
       }
     }
 
-    // Fallback: 如果沒有指定老師/科目，或是找不到對應的 enrollment，則更新總餘額（通用錢包）
-    await updateDoc(ref, {
+    // Fallback
+    await FinanceRepository.updateStudentDoc(ref, {
       balance: (data.balance || 0) + amountChange,
       remainingLessons: (data.remainingLessons || 0) + lessonsChange,
     });
@@ -103,10 +66,9 @@ export const updateStudentBalance = async (studentId: string, amountChange: numb
 
 /**
  * 遞延收入轉實質營收：執行強制結算
- * 扣除學生特定存錢筒餘額 -> 產生實質營收紀錄 -> 產生老師支出紀錄
  */
 export const settleLessonTransaction = async (lesson: Lesson) => {
-  if (lesson.type !== 'LESSON') return; // 租借目前暫不走遞延結算邏輯
+  if (lesson.type !== 'LESSON') return;
 
   const amountToDeduct = lesson.unitPrice * lesson.lessonsCount;
 
@@ -135,12 +97,11 @@ export const settleLessonTransaction = async (lesson: Lesson) => {
     } as any);
   }
 
-  // 3. 認列補習班實質營收 (預收款轉收入)
-  // 注意：這裡產生的實質營收入帳，主要是給報表對帳用
+  // 3. 認列補習班營收
   await addTransaction({
     userId: lesson.studentId!,
     userName: lesson.studentName!,
-    type: 'LESSON_FEE', // 作為已實現營收的標籤
+    type: 'LESSON_FEE',
     category: '課程營收(已實現)',
     amount: amountToDeduct,
     description: `[營收實現] ${lesson.teacherName} - ${lesson.courseName} (${lesson.lessonsCount} 堂)`,
@@ -152,7 +113,7 @@ export const settleLessonTransaction = async (lesson: Lesson) => {
 };
 
 /**
- * 沖銷課程帳務：將金額退回給學生，並刪除產生的營業/薪資財務紀錄 (依據 refId)
+ * 沖銷課程帳務
  */
 export const unsettleLessonTransaction = async (lesson: Lesson) => {
   if (!lesson.id || lesson.type !== 'LESSON') return;
@@ -160,36 +121,35 @@ export const unsettleLessonTransaction = async (lesson: Lesson) => {
   const restoredLessonsCount = Number(lesson.lessonsCount) || 1;
   const amountToRestore = lesson.unitPrice * restoredLessonsCount;
 
-  // 1. 退還專屬存錢筒堂數與金額
+  // 1. 退還
   await updateStudentBalance(
     lesson.studentId!, 
-    amountToRestore, // 加回帳面金額
-    restoredLessonsCount, // 加回堂數
+    amountToRestore,
+    restoredLessonsCount,
     lesson.teacherId, 
     lesson.courseName
   );
 
-  // 2. 找到依據 refId = lesson.id 產生的相關實行財務紀錄，並直接刪除 (沖銷)
-  const q = query(txCol, where("refId", "==", lesson.id));
-  const snap = await getDocs(q);
-  for (const docSnapshot of snap.docs) {
-    await deleteDoc(docSnapshot.ref);
+  // 2. 刪除相關紀錄 (沖銷)
+  const relatedTxs = await FinanceRepository.getTransactionsByRefId(lesson.id);
+  for (const tx of relatedTxs) {
+    if (tx.id) await FinanceRepository.deleteTransaction(tx.id);
   }
 };
 
 // ── Daily Closings ──────────────────────────────────────────
 
 export const getDailyClosingStatus = async (dateStr: string): Promise<boolean> => {
-  const snap = await getDoc(doc(db, 'daily_closings', dateStr));
-  return snap.exists() ? snap.data().isClosed === true : false;
+  const data = await FinanceRepository.getClosingStatus(dateStr);
+  return data ? data.isClosed === true : false;
 };
 
 export const setDailyClosingStatus = async (dateStr: string, isClosed: boolean, userId: string) => {
-  await setDoc(doc(db, 'daily_closings', dateStr), {
+  await FinanceRepository.setClosingStatus(dateStr, {
     isClosed,
     updatedAt: Date.now(),
     updatedBy: userId
-  }, { merge: true });
+  });
 };
 
 // ── Categories ────────────────────────────────────────────────
@@ -200,20 +160,20 @@ const defaultCategories = [
 ];
 
 export const getCategories = async (): Promise<string[]> => {
-  const snap = await getDocs(catCol);
-  if (snap.empty) {
+  const catNames = await FinanceRepository.getCategories();
+  if (catNames.length === 0) {
     for (const c of defaultCategories) {
-      await setDoc(doc(db, 'categories', c), { name: c });
+      await FinanceRepository.saveCategory(c);
     }
     return defaultCategories;
   }
-  return snap.docs.map(d => d.id);
+  return catNames;
 };
 
 export const addCategory = async (name: string) => {
-  await setDoc(doc(db, 'categories', name), { name });
+  await FinanceRepository.saveCategory(name);
 };
 
 export const deleteCategory = async (name: string) => {
-  await deleteDoc(doc(db, 'categories', name));
+  await FinanceRepository.deleteCategory(name);
 };

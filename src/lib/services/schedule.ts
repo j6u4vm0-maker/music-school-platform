@@ -1,38 +1,11 @@
-import { db } from "../firebase";
-import { collection, addDoc, getDocs, doc, updateDoc, query, where, deleteDoc } from "firebase/firestore";
+import { where } from "firebase/firestore";
 import { checkTeacherHoliday } from "./holidays";
+import { Lesson } from "../types/lesson";
+import * as lessonRepo from "../repositories/lessonRepository";
 
-export interface Lesson {
-  id?: string;
-  type: 'LESSON' | 'RENTAL'; // 新增類型區分
-  studentId?: string; // 租借時可為空
-  studentName?: string;
-  teacherId?: string; // 租借時可為空
-  teacherName?: string;
-  classroomId: string;
-  classroomName: string;
-  date: string; // 格式: YYYY-MM-DD
-  startTime: string; // 格式: HH:mm 
-  endTime: string; // 格式: HH:mm 
-  price?: number; 
+// Redundant type removed
 
-  // === 針對對帳單 Excel 新增的欄位 ===
-  courseName: string; // 課程名稱 (例如: 鋼琴, 租借, 樂理)
-  lessonsCount: number; // 學生收費堂數 (例如: 1, 1.5)
-  payoutLessonsCount?: number; // 老師支薪堂數 (例如: 1)
-  unitPrice: number; // 單堂鐘點 (對個別學生的收費標準)
-  teacherPayout: number; // 發給老師的薪水 (抽成)
-  
-  paymentMethod: 'UNPAID' | 'CASH' | 'TRANSFER'; // 收款狀態與方式
-  accountSuffix: string; // 帳號尾數
-  isPaid: boolean; // 入帳紀錄打勾
-  isSigned: boolean; // 簽到表打勾
-  isSettled?: boolean; // 收入與支出結算完畢
-  status?: 'NORMAL' | 'LEAVE' | 'CANCELLED'; // 課程狀態：正常, 請假, 取消
-  remark: string; // 備註
-}
-
-const lessonsCollection = collection(db, "lessons");
+// lessonCollection reference moved to repository
 
 // 檢查是否撞堂 (防撞堂核心演算法升級)
 export const checkConflict = async (
@@ -45,9 +18,7 @@ export const checkConflict = async (
   type: 'LESSON' | 'RENTAL' = 'LESSON',
   excludeLessonId?: string
 ): Promise<string | null> => {
-  const q = query(lessonsCollection, where("date", "==", date));
-  const snapshot = await getDocs(q);
-  const lessons = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }) as Lesson);
+  const lessons = await lessonRepo.fetchLessonsByQuery([where("date", "==", date)]);
 
   // 1. 先檢查老師是否在該時段有特休 (只針對課程)
   if (type === 'LESSON' && teacherId) {
@@ -81,9 +52,10 @@ export const checkLessonsOverlapWithHoliday = async (
   date: string,
   halfDay: 'AM' | 'PM' | 'ALL'
 ): Promise<string | null> => {
-  const q = query(lessonsCollection, where("date", "==", date), where("teacherId", "==", teacherId));
-  const snapshot = await getDocs(q);
-  const lessons = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }) as Lesson);
+  const lessons = await lessonRepo.fetchLessonsByQuery([
+    where("date", "==", date), 
+    where("teacherId", "==", teacherId)
+  ]);
 
   const isAM = (t: string) => t < '12:00';
   const isPM = (t: string) => t >= '12:00';
@@ -118,18 +90,11 @@ export const checkLessonsConflictBatch = async (
   const minDate = sortedDates[0].date;
   const maxDate = sortedDates[sortedDates.length - 1].date;
 
-  const q = query(
-    lessonsCollection, 
+  const lessons = await lessonRepo.fetchLessonsByQuery([
     where("teacherId", "==", teacherId),
     where("date", ">=", minDate),
     where("date", "<=", maxDate)
-  );
-
-  const snapshot = await getDocs(q);
-  const lessons = snapshot.docs.map(doc => {
-      const d = doc.data();
-      return { id: doc.id, ...d } as Lesson;
-  });
+  ]);
 
   const isAM = (t: string) => t < '12:00';
   const isPM = (t: string) => t >= '12:00';
@@ -158,98 +123,67 @@ export const checkLessonsConflictBatch = async (
 
 // 新增課程記錄
 export const addLesson = async (lesson: Lesson) => {
-  const docRef = await addDoc(lessonsCollection, {
-    ...lesson,
-    createdAt: Date.now()
-  });
-  return docRef.id;
+  return await lessonRepo.addLessonRecord(lesson);
 };
 
 // 更新課程狀態 (每日打勾、更改尾數等)
 export const updateLessonStatus = async (lessonId: string, updates: Partial<Lesson>) => {
-  const ref = doc(db, "lessons", lessonId);
-  await updateDoc(ref, updates);
+  await lessonRepo.updateLessonRecord(lessonId, updates);
 };
 
 export const deleteLesson = async (lessonId: string) => {
-  await deleteDoc(doc(db, "lessons", lessonId));
+  await lessonRepo.deleteLessonRecord(lessonId);
 };
+
+/**
+ * 輔助方法：統一標準化 Lesson 數據架構 (Service 內部邏輯)
+ */
+const normalizeLesson = (d: any): Lesson => ({
+  id: d.id,
+  ...d,
+  type: d.type || 'LESSON',
+  courseName: d.courseName || (d.type === 'RENTAL' ? '教室租借' : '預設課程(舊紀錄)'),
+  lessonsCount: Number(d.lessonsCount) || 1, 
+  payoutLessonsCount: Number(d.payoutLessonsCount) || Number(d.lessonsCount) || 1,
+  unitPrice: Number(d.unitPrice) || Number(d.price) || 0,
+  teacherPayout: Number(d.teacherPayout) || 0,
+  paymentMethod: d.paymentMethod || 'UNPAID',
+  accountSuffix: d.accountSuffix || '',
+  isPaid: Boolean(d.isPaid),
+  isSigned: Boolean(d.isSigned),
+  isSettled: Boolean(d.isSettled),
+  remark: d.remark || ''
+});
 
 // 提取指定日期的所有課程 (包含日結紀錄)
 export const getLessonsByDate = async (date: string) => {
-  const q = query(lessonsCollection, where("date", "==", date));
-  const snapshot = await getDocs(q);
-  // 按照時間排序
-  const data = snapshot.docs.map(doc => {
-    const d = doc.data();
-    return {
-      id: doc.id,
-      ...d,
-      type: d.type || 'LESSON',
-      courseName: d.courseName || (d.type === 'RENTAL' ? '教室租借' : '預設課程(舊紀錄)'),
-      lessonsCount: Number(d.lessonsCount) || 1, // 預設 1 堂
-      payoutLessonsCount: Number(d.payoutLessonsCount) || Number(d.lessonsCount) || 1,
-      unitPrice: Number(d.unitPrice) || Number(d.price) || 0, // 兼容舊版 price
-      teacherPayout: Number(d.teacherPayout) || 0,
-      paymentMethod: d.paymentMethod || 'UNPAID',
-      accountSuffix: d.accountSuffix || '',
-      isPaid: Boolean(d.isPaid),
-      isSigned: Boolean(d.isSigned),
-      isSettled: Boolean(d.isSettled),
-      remark: d.remark || ''
-    } as Lesson;
-  });
-  return data.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const data = await lessonRepo.fetchLessonsByQuery([where("date", "==", date)]);
+  // 在 Service 層執行標準化與排序
+  return data.map(normalizeLesson).sort((a, b) => a.startTime.localeCompare(b.startTime));
 };
 
 // 提取指定日期範圍的所有課程 (例如週視圖)
 export const getLessonsByDateRange = async (startDate: string, endDate: string) => {
-  const q = query(
-    lessonsCollection, 
+  const data = await lessonRepo.fetchLessonsByQuery([
     where("date", ">=", startDate), 
     where("date", "<=", endDate)
-  );
-  const snapshot = await getDocs(q);
-  const data = snapshot.docs.map(doc => {
-    const d = doc.data();
-    return {
-      id: doc.id,
-      ...d,
-      type: d.type || 'LESSON',
-      courseName: d.courseName || (d.type === 'RENTAL' ? '教室租借' : '預設課程(舊紀錄)'),
-      lessonsCount: Number(d.lessonsCount) || 1,
-      payoutLessonsCount: Number(d.payoutLessonsCount) || Number(d.lessonsCount) || 1,
-      unitPrice: Number(d.unitPrice) || Number(d.price) || 0,
-      teacherPayout: Number(d.teacherPayout) || 0,
-      paymentMethod: d.paymentMethod || 'UNPAID',
-      accountSuffix: d.accountSuffix || '',
-      isPaid: Boolean(d.isPaid),
-      isSigned: Boolean(d.isSigned),
-      isSettled: Boolean(d.isSettled),
-      remark: d.remark || ''
-    } as Lesson;
-  });
-  return data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+  ]);
+  return data.map(normalizeLesson).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 };
 
 // ── 月統計功能 ────────────────────────────────────────────────
 
 /** 取得特定月份的所有課程 (YYYY-MM) */
 export const getLessonsByMonth = async (month: string) => {
-  // Firestore 支援字串比較 YYYY-MM-DD
-  const q = query(
-    lessonsCollection, 
+  return await lessonRepo.fetchLessonsByQuery([
     where("date", ">=", `${month}-01`), 
     where("date", "<=", `${month}-31`)
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lesson));
+  ]);
 };
 
 /** 取得所有課程記錄 (用於備份) */
 export const getAllLessons = async (): Promise<Lesson[]> => {
-  const snapshot = await getDocs(lessonsCollection);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lesson));
+  return await lessonRepo.fetchAllLessons();
 };
 
 /** 計算特定月份各老師的「累計應得薪資」(基於已排課程) */
@@ -268,6 +202,42 @@ export const getMonthTeacherStats = async (month: string) => {
   });
 
   return stats;
+};
+
+/**
+ * [Service] 計算週期性預約的所有日期
+ */
+export const getRecurringDates = (baseDate: string, recurringType: 'NONE' | 'WEEK' | 'TWO_WEEKS', recurringCount: number): string[] => {
+  const dates = [baseDate];
+  if (recurringType === 'NONE') return dates;
+  
+  const interval = recurringType === 'WEEK' ? 7 : 14;
+  for (let i = 1; i < (recurringCount || 1); i++) {
+    const d = new Date(baseDate);
+    d.setDate(d.getDate() + (i * interval));
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+};
+
+/**
+ * [Service] 批次檢查衝突
+ */
+export const checkConflictsForDates = async (
+  dates: string[],
+  startTime: string,
+  endTime: string,
+  classroomId: string,
+  teacherId?: string,
+  studentId?: string,
+  type: 'LESSON' | 'RENTAL' = 'LESSON',
+  excludeLessonId?: string
+): Promise<{ date: string; error: string } | null> => {
+  for (const d of dates) {
+    const conflict = await checkConflict(d, startTime, endTime, classroomId, teacherId, studentId, type, excludeLessonId);
+    if (conflict) return { date: d, error: conflict };
+  }
+  return null;
 };
 
 // ── 老師專屬視圖數據服務 (含脫敏與安全隔離) ────────────────────────────────────

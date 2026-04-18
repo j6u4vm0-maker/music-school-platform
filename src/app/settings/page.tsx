@@ -26,6 +26,10 @@ export default function SettingsPage() {
     line_channel_secret: '',
     line_channel_access_token: '',
     liff_id: '',
+    reminder_enabled: false,
+    reminder_time: '20:00',
+    reminder_mode: 'DAY_BEFORE',
+    teacher_reminder_enabled: false,
   });
   const [selectedTables, setSelectedTables] = useState<string[]>([
     'students', 'teachers', 'classrooms', 'lessons', 'finance', 'products', 'inventory'
@@ -156,6 +160,10 @@ export default function SettingsPage() {
       line_channel_secret: form.get('line_channel_secret'),
       line_channel_access_token: form.get('line_channel_access_token'),
       liff_id: form.get('liff_id'),
+      reminder_enabled: form.get('reminder_enabled') === 'true',
+      reminder_time: form.get('reminder_time'),
+      reminder_mode: form.get('reminder_mode'),
+      teacher_reminder_enabled: form.get('teacher_reminder_enabled') === 'true',
     };
 
     try {
@@ -434,51 +442,100 @@ export default function SettingsPage() {
                       Messaging API & LIFF Dynamic Configuration
                    </p>
 
-                   <form onSubmit={handleSaveLineSettings} className="flex flex-col gap-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div>
-                            <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">Channel Secret</label>
-                            <input 
-                              name="line_channel_secret" 
-                              defaultValue={lineSettings.line_channel_secret}
-                              placeholder="尚未設定"
-                              className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-xs focus:ring-2 focus:ring-green-400/20 outline-none transition-all" 
-                            />
-                         </div>
-                         <div>
-                            <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">LIFF ID</label>
-                            <input 
-                              name="liff_id" 
-                              defaultValue={lineSettings.liff_id}
-                              placeholder="尚未設定"
-                              className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-xs focus:ring-2 focus:ring-green-400/20 outline-none transition-all" 
-                            />
-                         </div>
-                      </div>
-                      <div>
-                         <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">Channel Access Token</label>
-                         <textarea 
-                           name="line_channel_access_token" 
-                           defaultValue={lineSettings.line_channel_access_token}
-                           placeholder="尚未設定 Long-lived access token"
-                           rows={3}
-                           className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-[10px] focus:ring-2 focus:ring-green-400/20 outline-none transition-all resize-none" 
-                         />
-                      </div>
-                      
-                      <div className="flex items-center justify-between bg-green-50 p-4 rounded-2xl border border-green-100">
-                         <p className="text-[10px] text-green-700 font-bold leading-relaxed pr-4">
-                            💡 提示：儲存後系統將自動清除伺服器快取，下一次調用訊息發送服務時即會採用新金鑰。
-                         </p>
-                         <button 
-                           type="submit" 
-                           disabled={isSubmitting || !canEdit}
-                           className="bg-green-500 hover:bg-green-600 text-white font-black tracking-widest py-3 px-8 rounded-xl shadow-lg transition-all disabled:opacity-40 whitespace-nowrap text-sm"
-                         >
-                           {isSubmitting ? '更新中...' : '儲存變更'}
-                         </button>
-                      </div>
-                   </form>
+                    <form onSubmit={handleSaveLineSettings} className="flex flex-col gap-8">
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                             <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">Channel Secret</label>
+                             <input 
+                               name="line_channel_secret" 
+                               defaultValue={lineSettings.line_channel_secret}
+                               placeholder="尚未設定"
+                               className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-xs focus:ring-2 focus:ring-green-400/20 outline-none transition-all" 
+                             />
+                          </div>
+                          <div>
+                             <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">LIFF ID</label>
+                             <input 
+                               name="liff_id" 
+                               defaultValue={lineSettings.liff_id}
+                               placeholder="尚未設定"
+                               className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-xs focus:ring-2 focus:ring-green-400/20 outline-none transition-all" 
+                             />
+                          </div>
+                       </div>
+                       <div>
+                          <label className="block text-[10px] font-black tracking-widest text-[#4a4238]/60 mb-2 uppercase">Channel Access Token</label>
+                          <textarea 
+                            name="line_channel_access_token" 
+                            defaultValue={lineSettings.line_channel_access_token}
+                            placeholder="尚未設定 Long-lived access token"
+                            rows={2}
+                            className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-2xl px-4 py-3 font-mono text-[10px] focus:ring-2 focus:ring-green-400/20 outline-none transition-all resize-none" 
+                          />
+                       </div>
+
+                       {/* Reminder Settings Section */}
+                       <div className="bg-[#f8f7f2] rounded-3xl p-6 border border-[#ece4d9]">
+                          <h5 className="font-black text-xs text-[#4a4238] tracking-widest mb-4 flex items-center gap-2">
+                             🔔 智慧自動提醒設定 (Smart Reminders)
+                          </h5>
+                          
+                          <div className="flex flex-col gap-5">
+                             <div className="flex items-center justify-between">
+                                <label className="text-sm font-bold text-[#4a4238]">啟用學員課前提醒</label>
+                                <div className="flex bg-white p-1 rounded-full border border-[#ece4d9]">
+                                   <button type="button" onClick={() => setLineSettings({...lineSettings, reminder_enabled: true})} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all ${lineSettings.reminder_enabled ? 'bg-[#4a4238] text-white' : 'text-[#4a4238]/40'}`}>ON</button>
+                                   <button type="button" onClick={() => setLineSettings({...lineSettings, reminder_enabled: false})} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all ${!lineSettings.reminder_enabled ? 'bg-red-500 text-white' : 'text-[#4a4238]/40'}`}>OFF</button>
+                                   <input type="hidden" name="reminder_enabled" value={lineSettings.reminder_enabled ? 'true' : 'false'} />
+                                </div>
+                             </div>
+
+                             {lineSettings.reminder_enabled && (
+                               <div className="flex flex-col gap-4 pl-4 border-l-2 border-[#ece4d9] animate-in slide-in-from-left duration-300">
+                                  <div className="flex items-center justify-between">
+                                     <label className="text-xs font-bold text-[#4a4238]/60">提醒模式</label>
+                                     <div className="flex gap-2">
+                                        <button type="button" onClick={() => setLineSettings({...lineSettings, reminder_mode: 'DAY_BEFORE'})} className={`px-3 py-1.5 rounded-lg text-[10px] font-black border tracking-widest transition-all ${lineSettings.reminder_mode === 'DAY_BEFORE' ? 'bg-[#c4a480] text-white border-[#c4a480]' : 'bg-white text-[#4a4238]/40 border-[#ece4d9]'}`}>前一晚發送</button>
+                                        <button type="button" onClick={() => setLineSettings({...lineSettings, reminder_mode: 'SAME_DAY'})} className={`px-3 py-1.5 rounded-lg text-[10px] font-black border tracking-widest transition-all ${lineSettings.reminder_mode === 'SAME_DAY' ? 'bg-[#c4a480] text-white border-[#c4a480]' : 'bg-white text-[#4a4238]/40 border-[#ece4d9]'}`}>當天早上發送</button>
+                                        <input type="hidden" name="reminder_mode" value={lineSettings.reminder_mode} />
+                                     </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                     <label className="text-xs font-bold text-[#4a4238]/60">每日發送時間</label>
+                                     <select name="reminder_time" value={lineSettings.reminder_time} onChange={e => setLineSettings({...lineSettings, reminder_time: e.target.value})} className="bg-white border border-[#ece4d9] px-3 py-1.5 rounded-lg text-xs font-black font-mono focus:outline-none">
+                                        {Array.from({length: 24}).map((_, i) => (
+                                          <option key={i} value={`${String(i).padStart(2, '0')}:00`}>{String(i).padStart(2, '0')}:00</option>
+                                        ))}
+                                     </select>
+                                  </div>
+
+                                  <div className="flex items-center justify-between">
+                                     <label className="text-sm font-bold text-[#4a4238]">同步發送老師教學清單</label>
+                                     <div className="flex bg-white p-1 rounded-full border border-[#ece4d9]">
+                                        <button type="button" onClick={() => setLineSettings({...lineSettings, teacher_reminder_enabled: true})} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all ${lineSettings.teacher_reminder_enabled ? 'bg-[#4a4238] text-white' : 'text-[#4a4238]/40'}`}>ON</button>
+                                        <button type="button" onClick={() => setLineSettings({...lineSettings, teacher_reminder_enabled: false})} className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all ${!lineSettings.teacher_reminder_enabled ? 'bg-red-500 text-white' : 'text-[#4a4238]/40'}`}>OFF</button>
+                                        <input type="hidden" name="teacher_reminder_enabled" value={lineSettings.teacher_reminder_enabled ? 'true' : 'false'} />
+                                     </div>
+                                  </div>
+                               </div>
+                             )}
+                          </div>
+                       </div>
+                       
+                       <div className="flex items-center justify-between bg-green-50 p-6 rounded-3xl border border-green-100">
+                          <p className="text-[10px] text-green-700 font-bold leading-relaxed pr-6">
+                             💡 提醒：設定完成後，GitHub Actions 將會每小時檢查一次，並在您指定的整點時間執行推播。
+                          </p>
+                          <button 
+                            type="submit" 
+                            disabled={isSubmitting || !canEdit}
+                            className="bg-green-600 hover:bg-green-700 text-white font-black tracking-widest py-4 px-10 rounded-2xl shadow-xl transition-all disabled:opacity-40 whitespace-nowrap text-sm hover:-translate-y-1"
+                          >
+                            {isSubmitting ? '更新中...' : '儲存所有設定'}
+                          </button>
+                       </div>
+                    </form>
                  </div>
               </div>
             </div>

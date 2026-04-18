@@ -6,10 +6,12 @@ const SETTINGS_COLLECTION = 'system_settings';
 
 export interface LineBinding {
   id?: string;
-  studentId: string;
-  studentName: string;
+  studentId?: string;
+  teacherId?: string;
+  studentName?: string;
+  teacherName?: string;
   lineUid: string;
-  role: string; // 角色：媽媽, 爸爸, 學生本人, 家長, 其他
+  role: string; // 角色：媽媽, 爸爸, 學生本人, 家長, 老師, 其他
   createdAt: any;
 }
 
@@ -253,24 +255,110 @@ export const createWelcomeFlex = (studentNames: string[]) => {
 };
 
 /**
- * 建立課前提醒訊息
+ * 建立課前提醒訊息 (Flex 版)
  */
-export const createReminderMessage = (studentName: string, date: string, lessons: any[]) => {
+export const createReminderFlex = (userName: string, date: string, lessons: any[], isTeacher: boolean = false) => {
   const formattedDate = new Date(date).toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' });
   
-  let bodyText = `🔔 明日上課提醒\n\n${studentName} 您好，提醒您明天有課程預約：\n📅 日期：${formattedDate}\n`;
-  
-  lessons.sort((a, b) => a.startTime.localeCompare(b.startTime)).forEach((l, idx) => {
-    bodyText += `\n[課程 ${idx + 1}]\n`;
-    bodyText += `⏰ 時間：${l.startTime} ~ ${l.endTime}\n`;
-    bodyText += `🎨 課程：${l.courseName}\n`;
-    bodyText += `👩‍🏫 老師：${l.teacherName}\n`;
-    bodyText += `📍 教室：${l.classroomName}\n`;
-  });
-
-  bodyText += `\n✨ 請準時出席，若需請假或調課請提前告知。期待明天見到您！`;
-  
-  return [{ type: "text", text: bodyText }];
+  return [
+    {
+      type: "flex",
+      altText: `🔔 ${isTeacher ? '今日教學提醒' : '明日上課提醒'}`,
+      contents: {
+        type: "bubble",
+        header: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            {
+              type: "text",
+              text: isTeacher ? "👨‍🏫 教學行程提醒" : "🔔 上課預約提醒",
+              weight: "bold",
+              color: "#ffffff",
+              size: "lg",
+              align: "center"
+            }
+          ],
+          backgroundColor: isTeacher ? "#4a4238" : "#c4a484"
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          spacing: "md",
+          contents: [
+            {
+              type: "text",
+              text: `${userName} 您好，${isTeacher ? '您本日的教學行程如下：' : '提醒您明日有課程預約：'}`,
+              weight: "bold",
+              size: "sm",
+              color: "#4a4238"
+            },
+            {
+              type: "text",
+              text: `📅 日期：${formattedDate}`,
+              size: "xs",
+              color: "#c4a484",
+              weight: "bold"
+            },
+            {
+              type: "separator",
+              margin: "md"
+            },
+            {
+              type: "box",
+              layout: "vertical",
+              margin: "md",
+              spacing: "sm",
+              contents: lessons.sort((a, b) => a.startTime.localeCompare(b.startTime)).map((l, idx) => ({
+                type: "box",
+                layout: "vertical",
+                backgroundColor: "#f8f7f2",
+                paddingAll: "lg",
+                cornerRadius: "md",
+                contents: [
+                  {
+                    type: "text",
+                    text: `${l.startTime} - ${l.endTime}`,
+                    weight: "bold",
+                    size: "sm",
+                    color: "#4a4238"
+                  },
+                  {
+                    type: "text",
+                    text: `${isTeacher ? '學員：' + l.studentName : '課程：' + l.courseName}`,
+                    size: "xs",
+                    color: "#4a4238",
+                    margin: "xs"
+                  },
+                  {
+                    type: "text",
+                    text: `📍 教室：${l.classroomName}`,
+                    size: "xs",
+                    color: "#c4a484",
+                    margin: "xs"
+                  }
+                ]
+              }))
+            }
+          ]
+        },
+        footer: {
+          type: "box",
+          layout: "vertical",
+          contents: [
+            {
+              type: "text",
+              text: "如有任何問題，請隨時聯繫櫃檯。",
+              size: "xxs",
+              color: "#aaaaaa",
+              align: "center"
+            }
+          ],
+          paddingAll: "sm"
+        }
+      }
+    }
+  ];
 };
 
 /**
@@ -364,35 +452,35 @@ export const createBroadcastFlex = (title: string, desc: string, imageUrl?: stri
 };
 
 /**
- * 每日提醒自動化邏輯
+ * 每日提醒自動化邏輯 (學員端)
  */
-export const runDailyLineReminders = async () => {
-  console.log('[Cron] Starting daily LINE reminders...');
+export const runDailyLineReminders = async (targetDate?: string) => {
+  console.log('[Cron] Starting daily LINE reminders (Students)...');
   
-  // 1. 計算明天日期 (台北時間)
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dateStr = tomorrow.toLocaleDateString('en-CA'); // YYYY-MM-DD
+  // 1. 計算日期
+  let dateStr = targetDate;
+  if (!dateStr) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    dateStr = tomorrow.toLocaleDateString('en-CA'); 
+  }
   
   console.log(`[Cron] Target Date: ${dateStr}`);
 
-  // 2. 獲取明天所有課程
+  // 2. 獲取當日所有課程
   const lessonsRef = collection(db, "lessons");
   const q = query(lessonsRef, where("date", "==", dateStr));
   const snapshot = await getDocs(q);
   
   if (snapshot.empty) {
-    console.log('[Cron] No lessons found for tomorrow.');
-    return { success: true, message: 'No lessons tomorrow' };
+    console.log('[Cron] No lessons found for this date.');
+    return { success: true, message: 'No lessons' };
   }
 
-  // 3. 過濾並分組 (排除請假 & 僅限課程)
+  // 3. 過濾並分組
   const studentLessons: Record<string, {name: string, list: any[]}> = {};
-  let count = 0;
-  
   snapshot.docs.forEach(doc => {
     const data = doc.data();
-    // 排除：不是課程(租借)、已請假、已取消
     if (data.type !== 'LESSON') return;
     if (data.status === 'LEAVE' || data.status === 'CANCELLED') return;
     
@@ -400,10 +488,7 @@ export const runDailyLineReminders = async () => {
       studentLessons[data.studentId] = { name: data.studentName, list: [] };
     }
     studentLessons[data.studentId].list.push(data);
-    count++;
   });
-
-  console.log(`[Cron] Found ${count} lessons for ${Object.keys(studentLessons).length} students.`);
 
   // 4. 發送推播
   let sentCount = 0;
@@ -412,12 +497,11 @@ export const runDailyLineReminders = async () => {
     const bindings = await getStudentBindings(studentId);
     
     if (bindings.length > 0) {
-      const msg = createReminderMessage(info.name, dateStr, info.list);
-      // 一個學員可能綁定多個 LINE 帳號 (例如爸、媽)
+      const msg = createReminderFlex(info.name, dateStr, info.list, false);
       for (const b of bindings) {
         try {
-          const res = await sendLineMessage(b.lineUid, msg);
-          if (res) sentCount++;
+          await sendLineMessage(b.lineUid, msg);
+          sentCount++;
         } catch (err) {
           console.error(`[Cron] Failed to send to ${b.lineUid}:`, err);
         }
@@ -425,7 +509,56 @@ export const runDailyLineReminders = async () => {
     }
   }
 
-  console.log(`[Cron] Finished. Total messages sent: ${sentCount}`);
+  return { success: true, sentCount };
+};
+
+/**
+ * 每日提醒自動化邏輯 (老師端)
+ */
+export const runTeacherLineReminders = async (targetDate?: string) => {
+  console.log('[Cron] Starting daily LINE reminders (Teachers)...');
+  
+  let dateStr = targetDate;
+  if (!dateStr) {
+    dateStr = new Date().toLocaleDateString('en-CA'); 
+  }
+
+  const lessonsRef = collection(db, "lessons");
+  const q = query(lessonsRef, where("date", "==", dateStr));
+  const snapshot = await getDocs(q);
+  
+  if (snapshot.empty) return { success: true, message: 'No lessons' };
+
+  const teacherLessons: Record<string, {name: string, list: any[]}> = {};
+  snapshot.docs.forEach(doc => {
+    const data = doc.data();
+    if (data.type !== 'LESSON') return;
+    if (data.status === 'LEAVE' || data.status === 'CANCELLED') return;
+    
+    if (!teacherLessons[data.teacherId]) {
+      teacherLessons[data.teacherId] = { name: data.teacherName, list: [] };
+    }
+    teacherLessons[data.teacherId].list.push(data);
+  });
+
+  let sentCount = 0;
+  for (const teacherId in teacherLessons) {
+    const info = teacherLessons[teacherId];
+    const bindings = await getTeacherBindings(teacherId);
+    
+    if (bindings.length > 0) {
+      const msg = createReminderFlex(info.name, dateStr, info.list, true);
+      for (const b of bindings) {
+        try {
+          await sendLineMessage(b.lineUid, msg);
+          sentCount++;
+        } catch (err) {
+          console.error(`[Cron] Failed to send to teacher ${b.lineUid}:`, err);
+        }
+      }
+    }
+  }
+
   return { success: true, sentCount };
 };
 
@@ -434,6 +567,15 @@ export const runDailyLineReminders = async () => {
  */
 export const getStudentBindings = async (studentId: string) => {
   const q = query(bindingsCollection, where("studentId", "==", studentId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LineBinding));
+};
+
+/**
+ * 取得特定老師的所有綁定帳號
+ */
+export const getTeacherBindings = async (teacherId: string) => {
+  const q = query(bindingsCollection, where("teacherId", "==", teacherId));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as LineBinding));
 };

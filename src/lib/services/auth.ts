@@ -24,21 +24,9 @@ import {
   collection,
   getDocs,
 } from 'firebase/firestore';
+import { Role, UserProfile, PermissionLevel, ModulePermissions } from '../types/user';
 
-export type Role = 'ADMIN' | 'TEACHER';
-
-export type PermissionLevel = 'NONE' | 'VIEW' | 'EDIT';
-
-export type ModulePermissions = Record<string, PermissionLevel>;
-
-export interface UserProfile {
-  uid: string;
-  email: string | null;
-  name?: string;
-  role: Role;
-  permissions: ModulePermissions;
-  teacherId?: string; // 新增：用於關聯老師資料庫 (TEACHER 角色專用)
-}
+// Redundant types removed
 
 // ── Helpers ──────────────────────────────────────────────────
 

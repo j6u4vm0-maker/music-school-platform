@@ -2,33 +2,12 @@
 
 import { db } from '../firebase';
 import {
-  collection,
-  addDoc,
   doc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  runTransaction
+  runTransaction,
+  collection
 } from 'firebase/firestore';
-
-export interface Product {
-  productId?: string;
-  category: string;
-  brand: string;
-  itemName: string;
-  origin: string;
-  material: string;
-  costPrice: number;
-  sellPrice: number;
-  profit: number;
-  stockQty: number;
-  minStock: number;
-  note: string;
-}
-
-const productsCol = collection(db, 'products');
+import { Product } from '../types/inventory';
+import * as inventoryRepo from '../repositories/inventoryRepository';
 
 /**
  * 新增商品
@@ -36,18 +15,14 @@ const productsCol = collection(db, 'products');
  */
 export const addProduct = async (product: Omit<Product, 'productId' | 'profit'>) => {
   const profit = product.sellPrice - product.costPrice;
-  const docRef = await addDoc(productsCol, {
+  return await inventoryRepo.addProductRecord({
     ...product,
-    profit,
-    createdAt: Date.now()
+    profit
   });
-  return docRef.id;
 };
 
 /**
  * 更新商品資訊
- * 若有修改售價或進價，建議傳入完整的更改，以便重新計算 profit。
- * 若 payload 包含 sellPrice 與 costPrice，會自動重新計算利潤。
  */
 export const updateProduct = async (productId: string, updates: Partial<Omit<Product, 'productId'>>) => {
   const payload = { ...updates };
@@ -56,64 +31,47 @@ export const updateProduct = async (productId: string, updates: Partial<Omit<Pro
     payload.profit = payload.sellPrice - payload.costPrice;
   }
   
-  await updateDoc(doc(db, 'products', productId), payload);
+  await inventoryRepo.updateProductRecord(productId, payload);
 };
 
 /**
  * 刪除商品
  */
 export const deleteProduct = async (productId: string) => {
-  await deleteDoc(doc(db, 'products', productId));
+  await inventoryRepo.deleteProductRecord(productId);
 };
 
 /**
  * 取得所有商品列表 (即時監聽)
- * @param callback 傳入一個 callback function，當資料有變動時會自動觸發更新 UI
- * @returns 回傳一個 unsubscribe 函數，用於在元件 unmount 時取消監聽
  */
 export const subscribeToProducts = (callback: (products: Product[]) => void) => {
-  const q = query(productsCol, orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (snapshot) => {
-    const products = snapshot.docs.map(d => ({
-      productId: d.id,
-      ...d.data()
-    } as Product));
-    callback(products);
-  });
+  return inventoryRepo.subscribeProducts(callback);
 };
 
 /** 取得所有商品列表 (一次性獲取) */
 export const getProducts = async (): Promise<Product[]> => {
-  const snapshot = await getDocs(query(productsCol, orderBy('createdAt', 'desc')));
-  return snapshot.docs.map(d => ({ productId: d.id, ...d.data() } as Product));
+  return await inventoryRepo.fetchProducts();
 };
 
 /**
  * 取得近期的進銷存紀錄 (即時監聽)
  */
 export const subscribeToInventoryTransactions = (limitCount: number = 50, callback: (txs: any[]) => void) => {
-  const invCol = collection(db, 'inventory_transactions');
-  const q = query(invCol, orderBy('timestamp', 'desc')); // 可依需求加上 limit(limitCount)
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
+  // limitCount currently handled by repository query if needed, 
+  // here we keep the signature for compatibility.
+  return inventoryRepo.subscribeInventoryTransactions(callback);
 };
 
 /** 取得所有進銷存紀錄 (一次性獲取) */
 export const getInventoryTransactions = async (): Promise<any[]> => {
-  const snapshot = await getDocs(query(collection(db, 'inventory_transactions'), orderBy('timestamp', 'desc')));
-  return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  return await inventoryRepo.fetchInventoryTransactions();
 };
 
 /**
  * 取得近期的財務帳本紀錄 (即時監聽)
  */
 export const subscribeToFinancialLedgers = (limitCount: number = 50, callback: (ledgers: any[]) => void) => {
-  const ledgersCol = collection(db, 'financial_ledgers');
-  const q = query(ledgersCol, orderBy('timestamp', 'desc')); // 可依需求加上 limit(limitCount)
-  return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
+  return inventoryRepo.subscribeFinancialLedgers(callback);
 };
 
 /**
@@ -133,6 +91,7 @@ export const handleInventoryTransaction = async (
   const productRef = doc(db, 'products', params.productId);
   const inventoryCol = collection(db, 'inventory_transactions');
   const ledgerCol = collection(db, 'financial_ledgers');
+  const mainTxCol = collection(db, 'transactions');
 
   await runTransaction(db, async (transaction) => {
     // 1. 讀取與檢驗庫存狀態
@@ -141,7 +100,8 @@ export const handleInventoryTransaction = async (
       throw new Error(`找不到商品 (ID: ${params.productId})`);
     }
 
-    const currentStock = productSnap.data().stockQty || 0;
+    const productData = productSnap.data();
+    const currentStock = productData.stockQty || 0;
     let newStock = currentStock;
 
     if (scenario === 'STOCK_IN') {
@@ -149,7 +109,6 @@ export const handleInventoryTransaction = async (
     } else if (scenario === 'SALES') {
       newStock -= params.qty;
       if (newStock < 0) {
-        // 若庫存不足，拋出錯誤終止此批次交易
         throw new Error(`【交易失敗】該商品庫存不足！目前僅剩: ${currentStock}，欲結帳數量: ${params.qty}`);
       }
     }
@@ -180,7 +139,6 @@ export const handleInventoryTransaction = async (
     });
 
     // 5. 同步至主財務大帳本 (transactions collection)
-    const mainTxCol = collection(db, 'transactions');
     const mainTxDocRef = doc(mainTxCol);
     const dateStr = new Date(now).toISOString().split('T')[0];
     
@@ -190,10 +148,10 @@ export const handleInventoryTransaction = async (
       type: scenario === 'STOCK_IN' ? 'EXPENSE' : 'SALES',
       category: params.accountingCategory,
       amount: scenario === 'STOCK_IN' ? -(params.price * params.qty) : (params.price * params.qty),
-      description: `[庫存系統] ${scenario === 'STOCK_IN' ? '進貨' : '售出'}: ${productSnap.data().itemName} x ${params.qty}`,
+      description: `[庫存系統] ${scenario === 'STOCK_IN' ? '進貨' : '售出'}: ${productData.itemName} x ${params.qty}`,
       date: dateStr,
       createdAt: now,
-      paymentMethod: 'CASH', // 庫存操作預設為現金處理，若需支援轉帳需擴充 UI
+      paymentMethod: 'CASH', 
       refId: newInventoryDocRef.id
     });
   });
