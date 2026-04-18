@@ -100,7 +100,28 @@ function TeacherScheduleContent() {
     <main className="min-h-screen bg-[#f8f7f2] flex flex-col p-6 space-y-6 overflow-hidden animate-fade-in">
       <Navbar pageTitle="老師個人專屬排程">
         <div className="flex flex-wrap items-center gap-4 scale-90 md:scale-100 origin-right transition-all animate-slide-right">
-           <div className="flex bg-[#ece4d9]/50 p-1.5 rounded-2xl border border-[#ece4d9] shadow-inner">
+           {/* LINE Binding Status Button */}
+           {!profile?.lineId && profile?.teacherId && (
+              <button 
+                onClick={() => {
+                  const bindUrl = `/line/bind?teacher_id=${profile.teacherId}`;
+                  router.push(bindUrl);
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#06c755] hover:bg-[#05b34c] text-white rounded-xl text-[10px] font-black tracking-widest transition-all shadow-md group"
+              >
+                <span className="text-sm">💬</span>
+                <span>連結 LINE 通知</span>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity ml-1">→</span>
+              </button>
+           )}
+           {profile?.lineId && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 rounded-xl text-[10px] font-black tracking-widest border border-green-200 shadow-sm">
+                <span className="text-sm">✅</span>
+                <span>LINE 已連結</span>
+              </div>
+           )}
+
+           <div className="flex bg-[#ece4d9]/50 p-1.5 rounded-2xl border border-[#ece4d9] shadow-inner ml-2">
               <button 
                 onClick={() => setViewMode('WEEK')}
                 className={`px-4 py-1.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${viewMode === 'WEEK' ? 'bg-white text-[#4a4238] shadow-sm' : 'text-[#4a4238]/40 hover:text-[#4a4238]'}`}

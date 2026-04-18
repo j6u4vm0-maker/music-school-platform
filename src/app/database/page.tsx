@@ -6,7 +6,7 @@ import { getStudents, getTeachers, getClassrooms, addUser, addClassroom, updateU
 import { exportToExcel, importFromExcel } from '@/lib/utils/excel';
 import { getPricing, savePricing, getTeacherPricingList, TeacherInstrumentPricing, PriceTier } from '@/lib/services/pricing';
 import { saveUserProfile, logout, createUser, getAllUsers, resetPassword } from '@/lib/services/auth';
-import { getStudentBindings, unbindLineAccount, LineBinding } from '@/lib/services/line';
+import { getStudentBindings, getTeacherBindings, unbindLineAccount, LineBinding } from '@/lib/services/line';
 import { getTeacherHolidays, addTeacherHoliday, deleteTeacherHoliday, TeacherHoliday } from '@/lib/services/holidays';
 import { checkLessonsOverlapWithHoliday } from '@/lib/services/schedule';
 import { TEACHER_COLORS, getTeacherColor } from '@/lib/constants/colors';
@@ -315,6 +315,7 @@ export default function DatabasePage() {
   const [currentLineBindings, setCurrentLineBindings] = useState<LineBinding[]>([]);
   const [tempMobiles, setTempMobiles] = useState<string[]>([]);
   const [selectedColorIndex, setSelectedColorIndex] = useState<number>(-1);
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
 
   // 取得全學院現有的科目清單
   const allInstruments = Array.from(new Set(teachers.flatMap(t => t.instruments))).sort();
@@ -360,6 +361,13 @@ export default function DatabasePage() {
         return { ...s, isLineBound: bindings.length > 0 };
       }));
       setStudents(studentsWithBindings);
+
+      // Fetch binding status for all teachers
+      const teachersWithBindings = await Promise.all(teachersWithPricing.map(async (t) => {
+        const bindings = await getTeacherBindings(t.id!);
+        return { ...t, isLineBound: bindings.length > 0 };
+      }));
+      setTeachers(teachersWithBindings as any);
 
     } catch (e) {
       console.error(e);
@@ -467,6 +475,12 @@ export default function DatabasePage() {
     alert("✅ 綁定連結已複製到剪貼簿！\n您可以將此連結傳給家長，或製成 QRCode 供掃描。");
   };
 
+  const copyTeacherBindLink = (teacherId: string) => {
+    const url = `${window.location.origin}/line/bind?teacher_id=${teacherId}`;
+    navigator.clipboard.writeText(url);
+    alert("✅ 老師專屬綁定連結已複製！\n您可以將此連結傳給老師，引導其完成 LINE 通知設定。");
+  };
+
   const handleUnbindLine = async (bindingId: string) => {
     if (!confirm("確定要強制解除此 LINE 綁定嗎？家長將無法再收到通知。")) return;
     try {
@@ -523,7 +537,7 @@ export default function DatabasePage() {
           role: 'TEACHER',
           instruments: (form.get('instruments')?.toString() || '').split(',').map(s => s.trim()).filter(Boolean),
           hourlyRate: Number(form.get('hourlyRate')) || 0,
-          colorIndex: selectedColorIndex >= 0 ? selectedColorIndex : undefined,
+          colorIndex: selectedColorIndex >= 0 ? selectedColorIndex : null,
         };
         if (editingItem) await updateUser(editingItem.id, payload);
         else await addUser(payload as Teacher);
@@ -674,7 +688,16 @@ export default function DatabasePage() {
                <span className="opacity-50 text-xs">$ {t.hourlyRate.toLocaleString()} / Hr (未設進階定價)</span>
             )}
           </td>
-          <td className="py-4 px-6 text-right">
+          <td className="py-4 px-6 text-right whitespace-nowrap">
+            {canEdit && (
+              <button 
+                onClick={() => copyTeacherBindLink(t.id!)} 
+                className={`font-bold px-3 transition-all ${t.isLineBound ? 'text-green-500 hover:text-green-700' : 'text-[#c4a480] hover:text-[#4a4238]'}`}
+                title={t.isLineBound ? "老師已綁定 LINE (點擊可重新複製連結)" : "點擊複製老師綁定連結"}
+              >
+                {t.isLineBound ? '✅ LINE' : '🔗 連結'}
+              </button>
+            )}
             {canEdit && <Link href={`/holidays?teacherId=${t.id}`} className="text-purple-500 hover:text-purple-700 font-bold px-3">🏖️ 休假</Link>}
             {canEdit && <button onClick={() => openPricingModal(t)} className="text-emerald-500 hover:text-emerald-700 font-bold px-3">💰 定價</button>}
             {canEdit && <button onClick={() => openEditModal(t)} className="text-blue-500 hover:text-blue-700 font-bold px-3">編輯 ✎</button>}
@@ -756,9 +779,159 @@ export default function DatabasePage() {
              </div>
           </div>
 
-          <div className="flex-grow w-full overflow-x-auto">
+          <div className="flex-grow w-full">
             {isLoading ? (
                <div className="animate-pulse flex items-center justify-center h-48 text-[#4a4238]/50 font-bold tracking-widest">讀取加密資料庫中...</div>
+            ) : activeTab === 'teachers' ? (
+              /* ============================================================ */
+              /* 師資陣容：專業儀表板分欄模式 (Dashboard Split View) */
+              /* ============================================================ */
+              <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-320px)] min-h-[500px]">
+                
+                {/* 左側：名單導覽列 (Master List) */}
+                <div className="w-full md:w-72 flex flex-col bg-white/50 rounded-2xl border border-[#ece4d9] overflow-hidden">
+                  <div className="p-4 bg-[#ece4d9]/30 border-b border-[#ece4d9]">
+                    <span className="text-[10px] font-black tracking-widest text-[#4a4238]/50 uppercase">快速導覽清單 ({teachers.length})</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                    {teachers.map(t => {
+                      const colorObj = getTeacherColor(t.id, teachers);
+                      const isSelected = selectedTeacherId === t.id;
+                      return (
+                        <button 
+                          key={t.id}
+                          onClick={() => setSelectedTeacherId(t.id!)}
+                          className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 mb-1 group border ${isSelected ? 'bg-white shadow-md' : 'hover:bg-[#ece4d9]/40 border-transparent'}`}
+                          style={isSelected ? { borderColor: colorObj.bg } : {}}
+                        >
+                          <span 
+                            className={`w-3 h-3 rounded-full shrink-0 shadow-sm transition-transform ${isSelected ? 'scale-125' : 'group-hover:scale-110'}`} 
+                            style={{ backgroundColor: colorObj.bg, border: `1px solid ${colorObj.border}` }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className={`font-bold text-sm truncate ${isSelected ? 'text-[#4a4238]' : 'text-[#4a4238]/70'}`}>{t.name}</div>
+                            <div className="text-[10px] text-[#c4a480] font-black tracking-widest truncate">{t.instruments.slice(0, 2).join(', ')}{t.instruments.length > 2 ? '...' : ''}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 右側：詳細資訊終端 (Detail Pane) */}
+                <div className="flex-1 bg-white rounded-3xl border border-[#ece4d9] shadow-sm overflow-hidden flex flex-col">
+                  {selectedTeacherId ? (
+                    (() => {
+                      const t = teachers.find(teacher => teacher.id === selectedTeacherId);
+                      if (!t) return <div className="flex-1 flex items-center justify-center opacity-30">找不到老師資料</div>;
+                      const colorObj = getTeacherColor(t.id, teachers);
+                      
+                      return (
+                        <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in slide-in-from-right-4 duration-500">
+                          <div className="p-8 pb-6 border-b border-[#f8f7f2] flex flex-col md:flex-row justify-between items-start md:items-end gap-4 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 blur-3xl -z-10 rounded-full translate-x-1/2 -translate-y-1/2" style={{ backgroundColor: `${colorObj.bg}33` }}></div>
+                            
+                            <div className="flex items-center gap-6">
+                              <div className="relative">
+                                <div className="w-20 h-20 rounded-[24px] shadow-lg flex items-center justify-center text-3xl text-white font-serif font-black" style={{ backgroundColor: colorObj.bg, border: `3px solid white` }}>
+                                  {t.name.charAt(0)}
+                                </div>
+                                <div className={`absolute -bottom-1 -right-1 w-7 h-7 rounded-full border-2 border-white flex items-center justify-center shadow-md ${t.isLineBound ? 'bg-emerald-500' : 'bg-[#ece4d9]'}`}>
+                                  <span className="text-[10px]">{t.isLineBound ? '✅' : '🔗'}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <h4 className="text-3xl font-serif font-black text-[#4a4238] tracking-[0.1em] mb-1">{t.name}</h4>
+                                <div className="flex items-center gap-4 text-xs font-bold text-[#4a4238]/40">
+                                  <span>📞 {t.phone || '尚未提供電話'}</span>
+                                  <span className="w-1 h-1 rounded-full bg-[#ece4d9]"></span>
+                                  <span style={{ color: colorObj.bg }}>ID: {t.id?.slice(-6).toUpperCase()}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 操作快捷列 */}
+                            <div className="flex flex-wrap gap-2">
+                              {canEdit && (
+                                <>
+                                  <button onClick={() => copyTeacherBindLink(t.id!)} className={`flex items-center gap-1.5 text-[11px] font-black px-4 py-2 rounded-full border transition-all ${t.isLineBound ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-500 hover:text-white' : 'bg-[#f8f7f2] text-[#c4a480] border-[#ece4d9] hover:border-[#c4a480] hover:text-[#4a4238]'}`}>
+                                    {t.isLineBound ? '已綁定 LINE' : '💬 連結 LINE'}
+                                  </button>
+                                  <Link href={`/holidays?teacherId=${t.id}`} className="flex items-center gap-1.5 text-[11px] font-black px-4 py-2 rounded-full border border-[#ece4d9] text-purple-400 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50 transition-all">
+                                    🏖️ 安排休假
+                                  </Link>
+                                  <button onClick={() => openPricingModal(t)} className="flex items-center gap-1.5 text-[11px] font-black px-4 py-2 rounded-full border border-[#ece4d9] text-emerald-500 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-all">
+                                    💰 定價比例
+                                  </button>
+                                  <button onClick={() => openEditModal(t)} className="flex items-center gap-1.5 text-[11px] font-black px-4 py-2 rounded-full border border-[#ece4d9] text-blue-400 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-all">
+                                    ✎ 編輯檔案
+                                  </button>
+                                  <button onClick={() => confirmDelete(t.id!)} className="flex items-center gap-1.5 text-[11px] font-black px-4 py-2 rounded-full border border-[#ece4d9] text-red-300 hover:border-red-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                                    ✕ 刪除
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 詳情本體：科目與定價 */}
+                          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-[#f8f7f2]/30">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                              {/* 專長樂器清單 */}
+                              <div className="flex flex-col gap-4">
+                                <h5 className="text-xs font-black tracking-[0.2em] text-[#4a4238]/40 border-b border-[#ece4d9] pb-2 uppercase">🎓 授課專長與資歷</h5>
+                                <div className="flex flex-wrap gap-2">
+                                  {t.instruments.length > 0 ? t.instruments.map(inst => (
+                                    <span key={inst} className="bg-white border border-[#ece4d9] px-4 py-2 rounded-xl text-sm font-bold text-[#4a4238] shadow-sm">
+                                      🎸 {inst}
+                                    </span>
+                                  )) : <span className="text-xs italic opacity-30">尚未填寫授課科目</span>}
+                                </div>
+                              </div>
+
+                              {/* 定價分派清單 */}
+                              <div className="flex flex-col gap-4">
+                                <h5 className="text-xs font-black tracking-[0.2em] text-[#4a4238]/40 border-b border-[#ece4d9] pb-2 uppercase">📊 定價策略與分拆</h5>
+                                <div className="flex flex-col gap-3">
+                                  {(t as any).pricingList && (t as any).pricingList.length > 0 ? (
+                                    (t as any).pricingList.map((p: any) => (
+                                      <div key={p.instrument} className="bg-white p-4 rounded-2xl border border-[#ece4d9] shadow-sm hover:shadow-md transition-shadow">
+                                        <div className="flex justify-between items-center mb-3">
+                                          <span className="font-black text-[#4a4238] tracking-widest">{p.instrument}</span>
+                                          <span className="text-[10px] bg-[#4a4238] text-white px-3 py-1 rounded-full font-bold">抽成: {p.payoutRate != null ? Math.round(p.payoutRate * 100) : 60}%</span>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          {p.tiers?.map((tier: any, idx: number) => (
+                                            <div key={idx} className="bg-[#f8f7f2] p-2 rounded-lg text-center border border-[#ece4d9]/50">
+                                              <div className="text-[9px] font-black text-[#c4a480] uppercase tracking-tighter">{tier.minLessons}堂以上</div>
+                                              <div className="font-mono font-black text-[#4a4238] text-sm">${tier.rate}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-center py-6 bg-white rounded-2xl border border-dashed border-[#ece4d9]">
+                                      <p className="font-mono text-xl font-black text-[#4a4238]">$ {t.hourlyRate.toLocaleString()}</p>
+                                      <p className="text-[10px] text-[#4a4238]/50 mt-1">基礎每小時定價 (未設定進階科目與階梯定價)</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-12 opacity-40">
+                      <div className="text-5xl mb-6">📂</div>
+                      <h4 className="text-xl font-bold tracking-widest mb-2">請選擇一位老師</h4>
+                      <p className="text-sm">點擊左側名單以查看詳細檔案與管理設定</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
               <table className="w-full text-left font-sans text-[#4a4238]/90">
                 <thead className="bg-[#ece4d9]/50 text-[#4a4238] border-y-2 border-[#ece4d9] uppercase tracking-widest text-xs">

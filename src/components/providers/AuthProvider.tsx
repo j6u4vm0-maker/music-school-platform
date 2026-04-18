@@ -19,21 +19,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    const isPublicPath = (path: string) => path === '/login' || path === '/schedule';
-
+    // 監聽 Auth 狀態 - 僅在組件掛載時註冊一次
     const unsub = onAuthStateChanged(async (firebaseUser) => {
-      if (firebaseUser) {
-        const p = await getUserProfile(firebaseUser.uid);
-        setProfile(p);
-        if (!p && !isPublicPath(pathname)) router.push('/login');
-      } else {
+      try {
+        if (firebaseUser) {
+          const p = await getUserProfile(firebaseUser.uid);
+          setProfile(p);
+        } else {
+          setProfile(null);
+        }
+      } catch (err) {
+        console.error('[Auth] Profile fetch failed:', err);
         setProfile(null);
-        if (!isPublicPath(pathname)) router.push('/login');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsub();
-  }, [pathname, router]);
+  }, []);
+
+  // 路由保護與跳轉邏輯
+  useEffect(() => {
+    if (loading) return;
+
+    const isPublicPath = (path: string) => 
+      path === '/login' || 
+      path === '/schedule' || 
+      path.startsWith('/line/bind') || // LINE 綁定路徑視為公共存取
+      path.includes('/api/cron');
+
+    if (!profile && !isPublicPath(pathname)) {
+      console.log('[Auth] Protected route accessed. Redirecting to login:', pathname);
+      router.push('/login');
+    }
+  }, [profile, loading, pathname, router]);
 
   const hasPermission = (
     module: string,

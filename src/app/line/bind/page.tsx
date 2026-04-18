@@ -7,20 +7,22 @@ import { bindLineAccount, createWelcomeFlex, sendLineMessage } from '@/lib/servi
 function BindForm() {
   const searchParams = useSearchParams();
   const studentId = searchParams.get('student_id');
+  const teacherId = searchParams.get('teacher_id');
+  const isTeacher = !!teacherId;
   
   // 模擬狀態
   const [lineUid, setLineUid] = useState('U123456789demo'); // 預設一個 Demo UID
   const [mobile, setMobile] = useState('');
-  const [role, setRole] = useState('家長');
+  const [role, setRole] = useState(isTeacher ? '老師' : '家長');
   
   const [status, setStatus] = useState<'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
   const [msg, setMsg] = useState('');
 
   const handleBind = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!studentId) {
+    if (!studentId && !teacherId) {
       setStatus('ERROR');
-      setMsg('請掃描正確的 QRCode (缺少 Student ID)');
+      setMsg('請掃描正確的 QRCode 或連結 (缺少 ID)');
       return;
     }
 
@@ -31,6 +33,7 @@ function BindForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           student_id: studentId,
+          teacher_id: teacherId,
           line_uid: lineUid,
           input_mobile: mobile,
           relationship: role,
@@ -44,7 +47,7 @@ function BindForm() {
       }
 
       setStatus('SUCCESS');
-      setMsg(`學員 ${data.student_name} 綁定成功！歡迎訊息已發送至您的 LINE。`);
+      setMsg(`${isTeacher ? '老師' : '學員'} ${data.name} 綁定成功！歡迎訊息已發送至您的 LINE。`);
     } catch (err: any) {
       console.error(err);
       setStatus('ERROR');
@@ -91,13 +94,15 @@ function BindForm() {
           </div>
 
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#4a4238]/40 mb-3 ml-1">家長手機號碼 (MOBILE)</label>
+            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-[#4a4238]/40 mb-3 ml-1">
+              {isTeacher ? '老師手機號碼' : '家長手機號碼'} (MOBILE)
+            </label>
             <input 
               type="tel" 
-              placeholder="請輸入系統留存的手機號碼"
+              placeholder={isTeacher ? "請輸入您的登記手機" : "請輸入系統留存的手機號碼"}
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
-              className="w-full bg-[#f8f7f2] border-2 border-transparent focus:border-[#c4a484] rounded-2xl px-6 py-4 outline-none transition-all font-bold text-[#4a4238] placeholder:text-[#4a4238]/20"
+              className="w-full bg-[#f8f7f2] border-2 border-transparent focus:border-[#c4a480] rounded-2xl px-6 py-4 outline-none transition-all font-bold text-[#4a4238] placeholder:text-[#4a4238]/20"
               required
             />
           </div>

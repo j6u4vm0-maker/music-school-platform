@@ -16,7 +16,7 @@ export const getTeacherColor = (teacherId: string | undefined, teachers: Teacher
   const teacher = teachers.find(t => t.id === teacherId);
   if (!teacher) return { bg: '#4a4238', light: '#ece4d9', text: '#4a4238', border: '#c4a484', name: '預設' };
   
-  if (teacher.colorIndex !== undefined && teacher.colorIndex >= 0 && teacher.colorIndex < TEACHER_COLORS.length) {
+  if (typeof teacher.colorIndex === 'number' && teacher.colorIndex >= 0 && teacher.colorIndex < TEACHER_COLORS.length) {
     return TEACHER_COLORS[teacher.colorIndex];
   }
   
