@@ -75,41 +75,103 @@ export default function TeacherSalaryPage() {
 
   return (
     <main className="flex min-h-screen flex-col items-center pb-24 relative overflow-x-hidden bg-[#f8f7f2]">
-      <div className="absolute top-[10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#ece4d9] blur-[150px] opacity-70 -z-10"></div>
+      <div className="no-print absolute top-[10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#ece4d9] blur-[150px] opacity-70 -z-10"></div>
       
       {/* Header & Month Selector */}
-      {/* Navbar */}
-      <Navbar pageTitle="教師薪資核銷中心">
-        <div className="flex items-center gap-4 bg-white/50 border border-[#ece4d9] px-4 py-2 rounded-full shadow-inner scale-90 md:scale-100 transition-all">
-           <label className="hidden md:block text-[9px] font-black tracking-widest text-[#c4a484] uppercase whitespace-nowrap">結算月份 Select Month</label>
-           <input 
-             type="month" 
-             value={analyticsMonth} 
-             onChange={(e) => setAnalyticsMonth(e.target.value)}
-             className="bg-transparent font-mono font-black text-[#4a4238] outline-none text-sm"
-           />
-        </div>
-      </Navbar>
+      <div className="no-print w-full flex flex-col items-center">
+        <Navbar pageTitle="教師薪資核銷中心" />
+      </div>
 
-      <div className="w-full max-w-7xl px-4 z-10 flex flex-col items-center">
+      <div className="no-print w-full max-w-7xl px-4 z-10 flex flex-col items-center">
         {/* Batch Action Bar */}
-        <div className="w-full mb-8 bg-white/40 backdrop-blur-md rounded-[28px] p-6 border border-white/60 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="w-full mb-8 flex flex-col gap-6 px-2">
+           {/* Row 1: Month Selector & Export Button */}
+           <div className="flex flex-col md:flex-row justify-between items-end gap-4">
+              <div className="flex flex-col gap-2">
+                 <label className="text-[10px] font-black tracking-[0.2em] text-[#c4a484] uppercase ml-1">切換薪資結算月份 Select Analytics Month</label>
+                 <div className="bg-white border-2 border-[#ece4d9] px-6 py-3 rounded-2xl flex items-center gap-4 shadow-sm">
+                    <span className="text-xl">📅</span>
+                    <input 
+                      type="month" 
+                      value={analyticsMonth} 
+                      onChange={(e) => setAnalyticsMonth(e.target.value)}
+                      className="bg-transparent font-mono font-black text-[#4a4238] outline-none text-lg"
+                    />
+                 </div>
+              </div>
+
+              <button 
+                onClick={async () => {
+                   if (selectedTeacherIds.size === 0) return;
+                   setIsExportingAll(true);
+                   try {
+                      const sheets: Record<string, any[]> = {};
+                      const selectedList = teachers.filter(t => selectedTeacherIds.has(t.id!));
+                      
+                      selectedList.forEach(teacher => {
+                         const teacherLessons = monthLessons.filter(l => l.teacherId === teacher.id && l.status !== 'CANCELLED');
+                         const grouped: Record<string, any> = {};
+                         
+                         teacherLessons.forEach(l => {
+                            const rate = l.teacherPayout / (l.payoutLessonsCount || l.lessonsCount || 1);
+                            const key = `${l.courseName}-${rate}`;
+                            if (!grouped[key]) {
+                               grouped[key] = { '課程名稱': l.courseName, '鐘點 (Rate)': rate, '節數 (Qty)': 0, '小計 (Subtotal)': 0 };
+                            }
+                            grouped[key]['節數 (Qty)'] += (l.payoutLessonsCount || l.lessonsCount || 1);
+                            grouped[key]['小計 (Subtotal)'] += l.teacherPayout;
+                         });
+  
+                         const data = Object.values(grouped);
+                         const total = data.reduce((sum, item) => sum + item['小計 (Subtotal)'], 0);
+                         data.push({ '課程名稱': '總計', '鐘點 (Rate)': '', '節數 (Qty)': '', '小計 (Subtotal)': total });
+                         
+                         sheets[`${teacher.name}_${analyticsMonth}`] = data;
+                      });
+                      
+                      multiSheetExport(sheets, `第七樂章_薪資單匯出_${analyticsMonth}`);
+                   } catch (err) {
+                      console.error(err);
+                      alert('匯出失敗');
+                   } finally {
+                      setIsExportingAll(false);
+                   }
+                }}
+                disabled={selectedTeacherIds.size === 0 || isExportingAll}
+                className="bg-[#4a4238] hover:bg-black disabled:bg-gray-300 text-white px-8 py-4 rounded-2xl font-black tracking-widest text-sm shadow-xl transition-all flex items-center gap-3 active:scale-95"
+              >
+                 {isExportingAll ? '🚀 正在產生報表...' : '💾 一鍵匯出所選薪資單 (.xlsx)'}
+              </button>
+           </div>
+
+           {/* Row 2: Select All (Moved to left) */}
            <div className="flex items-center gap-6">
               <label className="flex items-center gap-3 cursor-pointer group">
                  <input 
                    type="checkbox" 
                    className="w-5 h-5 rounded-lg accent-[#4a4238] cursor-pointer"
-                   checked={selectedTeacherIds.size > 0 && selectedTeacherIds.size === teachers.filter(t => (monthAccruedStats[t.id!]?.totalPayout || 0) > 0).length}
+                   checked={(() => {
+                      const visibleIds = teachers.filter(t => {
+                        const accrued = monthAccruedStats[t.id!] || { totalPayout: 0 };
+                        const paid = Math.abs(transactions.filter(tx => tx.userId === t.id && tx.type === 'TEACHER_PAYOUT' && tx.date.startsWith(analyticsMonth)).reduce((acc, tx) => acc + tx.amount, 0));
+                        return accrued.totalPayout > 0 || paid > 0;
+                      }).map(t => t.id!);
+                      return visibleIds.length > 0 && selectedTeacherIds.size === visibleIds.length;
+                   })()}
                    onChange={(e) => {
                       if (e.target.checked) {
-                         const activeIds = teachers.filter(t => (monthAccruedStats[t.id!]?.totalPayout || 0) > 0).map(t => t.id!);
-                         setSelectedTeacherIds(new Set(activeIds));
+                         const visibleIds = teachers.filter(t => {
+                           const accrued = monthAccruedStats[t.id!] || { totalPayout: 0 };
+                           const paid = Math.abs(transactions.filter(tx => tx.userId === t.id && tx.type === 'TEACHER_PAYOUT' && tx.date.startsWith(analyticsMonth)).reduce((acc, tx) => acc + tx.amount, 0));
+                           return accrued.totalPayout > 0 || paid > 0;
+                         }).map(t => t.id!);
+                         setSelectedTeacherIds(new Set(visibleIds));
                       } else {
                          setSelectedTeacherIds(new Set());
                       }
                    }}
                  />
-                 <span className="text-sm font-black text-[#4a4238] group-hover:text-[#c4a484] transition-colors">全選所有本月老師</span>
+                 <span className="text-sm font-black text-[#4a4238] group-hover:text-[#c4a484] transition-colors">全選所有老師</span>
               </label>
               {selectedTeacherIds.size > 0 && (
                 <div className="animate-in fade-in slide-in-from-left duration-300 flex items-center gap-2">
@@ -118,49 +180,6 @@ export default function TeacherSalaryPage() {
                 </div>
               )}
            </div>
-           
-           <button 
-             onClick={async () => {
-                if (selectedTeacherIds.size === 0) return;
-                setIsExportingAll(true);
-                try {
-                   const sheets: Record<string, any[]> = {};
-                   const selectedList = teachers.filter(t => selectedTeacherIds.has(t.id!));
-                   
-                   selectedList.forEach(teacher => {
-                      const teacherLessons = monthLessons.filter(l => l.teacherId === teacher.id && l.status !== 'CANCELLED');
-                      const grouped: Record<string, any> = {};
-                      
-                      teacherLessons.forEach(l => {
-                         const rate = l.teacherPayout / (l.payoutLessonsCount || l.lessonsCount || 1);
-                         const key = `${l.courseName}-${rate}`;
-                         if (!grouped[key]) {
-                            grouped[key] = { '課程名稱': l.courseName, '鐘點 (Rate)': rate, '節數 (Qty)': 0, '小計 (Subtotal)': 0 };
-                         }
-                         grouped[key]['節數 (Qty)'] += (l.payoutLessonsCount || l.lessonsCount || 1);
-                         grouped[key]['小計 (Subtotal)'] += l.teacherPayout;
-                      });
-
-                      const data = Object.values(grouped);
-                      const total = data.reduce((sum, item) => sum + item['小計 (Subtotal)'], 0);
-                      data.push({ '課程名稱': '總計', '鐘點 (Rate)': '', '節數 (Qty)': '', '小計 (Subtotal)': total });
-                      
-                      sheets[`${teacher.name}_${analyticsMonth}`] = data;
-                   });
-                   
-                   multiSheetExport(sheets, `第七樂章_薪資單匯出_${analyticsMonth}`);
-                } catch (err) {
-                   console.error(err);
-                   alert('匯出失敗');
-                } finally {
-                   setIsExportingAll(false);
-                }
-             }}
-             disabled={selectedTeacherIds.size === 0 || isExportingAll}
-             className="bg-[#4a4238] hover:bg-black disabled:bg-gray-300 text-white px-8 py-3 rounded-2xl font-black tracking-widest text-sm shadow-xl transition-all flex items-center gap-3 active:scale-95"
-           >
-              {isExportingAll ? '🚀 正在產生報表...' : '💾 一鍵匯出所選薪資單 (.xlsx)'}
-           </button>
         </div>
 
         {/* KPI Summary Row */}
@@ -361,17 +380,41 @@ export default function TeacherSalaryPage() {
 
       {/* Salary Slip Modal (Integrated) */}
       {isSalarySlipOpen && salarySlipTeacher && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:bg-white print:p-0 print:static print:inset-auto">
+        <div className="salary-slip-modal-wrapper fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm print:bg-white print:p-0 print:static print:inset-auto">
           <style dangerouslySetInnerHTML={{ __html: `
             @media print {
-              body * { visibility: hidden; }
-              .salary-slip-printable, .salary-slip-printable * { visibility: visible; }
-              .salary-slip-printable { position: absolute; left: 0; top: 0; width: 100%; border: none !important; }
+              body { background: white !important; margin: 0; padding: 0; }
               .no-print { display: none !important; }
+              .salary-slip-modal-wrapper { 
+                position: static !important; 
+                background: transparent !important; 
+                backdrop-filter: none !important; 
+                display: block !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+              }
+              .salary-slip-printable { 
+                position: relative !important; 
+                width: 100% !important; 
+                max-width: none !important;
+                max-height: none !important;
+                overflow: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important; 
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                background-color: white !important;
+                transform: none !important;
+                top: 0 !important;
+                left: 0 !important;
+              }
+              @page { size: auto; margin: 10mm; }
             }
           `}} />
           
-          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl p-10 relative overflow-y-auto max-h-[90vh] salary-slip-printable transform animate-in zoom-in-95 duration-300">
+          <div className="salary-slip-modal-wrapper bg-white w-full max-w-2xl rounded-[40px] shadow-2xl p-10 relative overflow-y-auto max-h-[90vh] salary-slip-printable transform animate-in zoom-in-95 duration-300">
             <button 
               onClick={() => setIsSalarySlipOpen(false)} 
               className="absolute top-8 right-8 text-gray-300 hover:text-[#4a4238] no-print transition-colors"

@@ -24,7 +24,9 @@ export default function FinancePage() {
   
   // Advanced Reporting & Categories
   const [categories, setCategories] = useState<string[]>([]);
-  const [filterRange, setFilterRange] = useState<'ALL' | 'WEEK' | 'MONTH'>('ALL');
+  const [filterRange, setFilterRange] = useState<'ALL' | 'WEEK' | 'MONTH' | 'CUSTOM'>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,6 +36,7 @@ export default function FinancePage() {
   const [viewMode, setViewMode] = useState<'LIST' | 'ANALYTICS'>('LIST');
   const [analyticsMonth, setAnalyticsMonth] = useState<string>(new Date().toISOString().substring(0, 7)); // 'YYYY-MM'
   const [monthLessons, setMonthLessons] = useState<any[]>([]);
+  const [monthAccruedStats, setMonthAccruedStats] = useState<any[]>([]);
   const [selectedTeacherDetail, setSelectedTeacherDetail] = useState<{ id: string, name: string, type: 'ACCRUED' | 'PAID' } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -222,6 +225,10 @@ export default function FinancePage() {
     }
     if (filterRange === 'MONTH') {
         return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+    }
+    if (filterRange === 'CUSTOM') {
+        if (!startDate || !endDate) return true;
+        return t.date >= startDate && t.date <= endDate;
     }
     return true;
   })
@@ -472,15 +479,35 @@ export default function FinancePage() {
             {/* Quick Actions (Only in List View) */}
             {viewMode === 'LIST' && (
               <div className="flex flex-wrap gap-4">
-              <div className="flex bg-[#ece4d9]/30 p-1 rounded-full mr-4 border border-[#ece4d9]">
-                {(['ALL', 'WEEK', 'MONTH'] as const).map(r => (
+              <div className="flex flex-wrap gap-4 items-center mb-4 md:mb-0">
+                <div className="flex bg-[#ece4d9]/30 p-1 rounded-full border border-[#ece4d9]">
+                {(['ALL', 'WEEK', 'MONTH', 'CUSTOM'] as const).map(r => (
                   <button 
                     key={r}
                     onClick={() => setFilterRange(r)}
                     className={`px-6 py-2 rounded-full text-xs font-black tracking-widest transition-all ${filterRange === r ? 'bg-[#4a4238] text-white shadow-md' : 'text-[#4a4238] hover:bg-white'}`}>
-                    {r === 'ALL' ? '全部' : r === 'WEEK' ? '近一週' : '本月份'}
+                    {r === 'ALL' ? '全部' : r === 'WEEK' ? '近一週' : r === 'MONTH' ? '本月份' : '選擇區間'}
                   </button>
                 ))}
+                </div>
+                
+                {filterRange === 'CUSTOM' && (
+                  <div className="flex items-center gap-2 bg-white border-2 border-[#ece4d9] px-3 py-2 rounded-2xl shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
+                    <input 
+                      type="date" 
+                      value={startDate} 
+                      onChange={(e) => setStartDate(e.target.value)} 
+                      className="bg-transparent text-xs font-bold text-[#4a4238] focus:outline-none"
+                    />
+                    <span className="text-[#4a4238]/30 font-bold">~</span>
+                    <input 
+                      type="date" 
+                      value={endDate} 
+                      onChange={(e) => setEndDate(e.target.value)} 
+                      className="bg-transparent text-xs font-bold text-[#4a4238] focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
               {canEdit && (
                 <>

@@ -76,7 +76,7 @@ function SortableModuleCard({ module, onActionClick }: { module: any, onActionCl
       </div>
 
       {module.featured && (
-        <div className="absolute top-5 right-5 bg-[#c4a484] text-white text-[9px] font-black tracking-widest px-2.5 py-1 rounded-full">
+        <div className="absolute bottom-[68px] left-8 bg-[#c4a484] text-white text-[9px] font-black tracking-widest px-2.5 py-1 rounded-full z-20">
           CORE
         </div>
       )}
@@ -113,7 +113,7 @@ function SortableModuleCard({ module, onActionClick }: { module: any, onActionCl
           e.stopPropagation();
           togglePin(module.href);
         }}
-        className={`absolute ${module.featured ? 'top-14' : 'top-5'} right-5 w-8 h-8 rounded-full flex items-center justify-center transition-all z-20 
+        className={`absolute top-5 right-5 w-8 h-8 rounded-full flex items-center justify-center transition-all z-20 
           ${isPinned 
             ? 'bg-amber-100 text-amber-500 shadow-sm' 
             : 'bg-white/50 text-[#4a4238]/20 hover:text-amber-400 hover:bg-white'}`}

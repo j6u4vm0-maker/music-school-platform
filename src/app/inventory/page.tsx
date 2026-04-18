@@ -48,6 +48,12 @@ export default function InventoryPage() {
     note: ''
   });
   const [brandFilter, setBrandFilter] = useState('ALL');
+  
+  // Selection State for Batch Operations
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batchCategory, setBatchCategory] = useState('');
+  const [batchBrand, setBatchBrand] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,11 +90,18 @@ export default function InventoryPage() {
     
     setIsSubmitting(true);
     try {
+      // 根據商品分類決定會計科目
+      let accountingCategory = '其他收入';
+      if (selectedProduct.category === '樂器') accountingCategory = '樂器買賣';
+      else if (selectedProduct.category === '樂譜') accountingCategory = '樂譜買賣';
+      else if (selectedProduct.category === '配件/周邊') accountingCategory = '樂器買賣';
+      else if (selectedProduct.category === '教材/圖書') accountingCategory = '樂譜買賣';
+
       await handleInventoryTransaction(modalType, {
         productId: selectedProduct.productId!,
         qty: txQty,
         price: txPrice,
-        accountingCategory: '樂器/教材買賣', // 也可以做成下拉選單，這裡先預設
+        accountingCategory,
         operator: profile?.name || '系統操作',
       });
       setIsModalOpen(false);
@@ -142,6 +155,52 @@ export default function InventoryPage() {
       } catch(err) {
         alert('刪除失敗');
       }
+    }
+  };
+
+  const handleBatchUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedIds.size === 0) return;
+    
+    setIsSubmitting(true);
+    try {
+      const updates: any = {};
+      if (batchCategory) updates.category = batchCategory;
+      if (batchBrand) updates.brand = batchBrand;
+      
+      if (Object.keys(updates).length === 0) {
+        alert('請至少輸入或選擇一項要修改的內容（分類或品牌）');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // 批次執行更新，這裡不涉及財務連動，純屬資產整理
+      const promises = Array.from(selectedIds).map(id => updateProduct(id, updates));
+      await Promise.all(promises);
+      
+      setIsBatchModalOpen(false);
+      setSelectedIds(new Set());
+      alert(`🎉 成功批次更新 ${selectedIds.size} 項商品的資料！`);
+    } catch (err) {
+      alert('批次更新失敗，請檢查網路連線。');
+    }
+    setIsSubmitting(false);
+  };
+
+  // Selection logic
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredProducts.length && filteredProducts.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      const newSet = new Set(filteredProducts.map(p => p.productId!));
+      setSelectedIds(newSet);
     }
   };
 
@@ -209,6 +268,7 @@ export default function InventoryPage() {
   const netProfit = totalRevenue - totalExpense;
 
   const brands = Array.from(new Set(products.map(p => p.brand).filter(Boolean))).sort();
+  const categoriesList = Array.from(new Set(products.map(p => p.category).filter(Boolean))).sort();
 
   const filteredProducts = products.filter(p => {
     // 全域搜尋 (支援品項、品牌、分類)
@@ -316,6 +376,14 @@ export default function InventoryPage() {
               <table className="w-full text-left font-sans text-[#4a4238]/90 min-w-[1400px]">
                 <thead className="bg-[#ece4d9]/50 text-[#4a4238] uppercase tracking-widest text-[10px] font-black border-b-2 border-[#ece4d9]">
                   <tr>
+                    <th className="py-4 px-6 w-16 text-center">
+                       <input 
+                         type="checkbox" 
+                         checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length}
+                         onChange={toggleSelectAll}
+                         className="w-4 h-4 rounded border-[#ece4d9] text-[#c4a484] focus:ring-[#c4a484]"
+                       />
+                    </th>
                     <th className="py-4 px-6 w-32">
                       分類
                       <input type="text" placeholder="篩選..." value={columnFilters.category} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, category: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
@@ -339,7 +407,8 @@ export default function InventoryPage() {
                     <th className="py-4 px-6 text-right w-24">進價</th>
                     <th className="py-4 px-6 text-right w-24">售價</th>
                     <th className="py-4 px-6 text-right w-24">利潤</th>
-                    <th className="py-4 px-6 text-center w-24">庫存</th>
+                    <th className="py-4 px-6 text-center w-28">庫存數量</th>
+                    <th className="py-4 px-6 text-center w-28">安全庫存</th>
                     <th className="py-4 px-6 w-48">
                       備註
                       <input type="text" placeholder="篩選..." value={columnFilters.note} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, note: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
@@ -349,7 +418,15 @@ export default function InventoryPage() {
                 </thead>
                 <tbody className="divide-y divide-[#ece4d9]/50">
                   {filteredProducts.map(p => (
-                    <tr key={p.productId} className="hover:bg-white/80 transition-colors">
+                    <tr key={p.productId} className={`hover:bg-white/80 transition-colors ${selectedIds.has(p.productId!) ? 'bg-[#c4a484]/5' : ''}`}>
+                      <td className="py-4 px-6 text-center">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.has(p.productId!)}
+                          onChange={() => toggleSelect(p.productId!)}
+                          className="w-4 h-4 rounded border-[#ece4d9] text-[#c4a484] focus:ring-[#c4a484]"
+                        />
+                      </td>
                       <td className="py-4 px-6">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.category === '樂譜' ? 'bg-indigo-100 text-indigo-600' : p.category === '樂器' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600'}`}>
                           {p.category || '未分類'}
@@ -365,6 +442,11 @@ export default function InventoryPage() {
                       <td className="py-4 px-6 text-center">
                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-black font-mono ${p.stockQty <= p.minStock ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-[#ece4d9] text-[#4a4238]'}`}>
                             {p.stockQty}
+                         </span>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                         <span className="inline-block px-3 py-1 rounded-full bg-white border border-[#ece4d9] text-[#4a4238]/50 text-xs font-black font-mono">
+                            {p.minStock}
                          </span>
                       </td>
                       <td className="py-4 px-6 text-xs opacity-50 truncate max-w-[150px]" title={p.note}>{p.note || '-'}</td>
@@ -465,6 +547,60 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      {/* Batch Edit Modal */}
+      {isBatchModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[60] flex items-center justify-center p-4" onClick={() => setIsBatchModalOpen(false)}>
+          <div className="bg-[#f8f7f2] w-full max-w-md rounded-[40px] p-8 md:p-12 shadow-2xl relative border-2 border-white" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setIsBatchModalOpen(false)} className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white text-[#4a4238] font-bold shadow-sm hover:bg-gray-50 transition-colors flex items-center justify-center">✕</button>
+            
+            <div className="mb-8 text-center">
+              <div className="w-16 h-16 bg-[#c4a484]/20 rounded-3xl flex items-center justify-center mx-auto mb-4 text-2xl">⚡</div>
+              <h2 className="text-2xl font-black text-[#4a4238]">批次快速修改</h2>
+              <p className="text-xs font-bold text-[#4a4238]/50 tracking-widest mt-2">正在針對已選取的 {selectedIds.size} 項商品進行調整</p>
+            </div>
+
+            <form onSubmit={handleBatchUpdate} className="flex flex-col gap-6">
+              <div className="flex flex-col gap-2">
+                 <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">套用新分類 (Batch Category)</label>
+                 <input 
+                   list="category-options"
+                   value={batchCategory} 
+                   onChange={e => setBatchCategory(e.target.value)} 
+                   className="w-full bg-white border-2 border-[#ece4d9] p-4 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm"
+                   placeholder="留空表示不變動分類..."
+                 />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                 <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">套用新品牌 (Batch Brand)</label>
+                 <input 
+                   list="brand-options"
+                   value={batchBrand} 
+                   onChange={e => setBatchBrand(e.target.value)} 
+                   className="w-full bg-white border-2 border-[#ece4d9] p-4 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm"
+                   placeholder="留空表示不變動品牌..."
+                 />
+              </div>
+
+              <div className="bg-[#ece4d9]/30 p-4 rounded-2xl border border-[#ece4d9] flex items-center gap-3">
+                 <span className="text-xl">⚠️</span>
+                 <p className="text-[10px] font-bold text-[#4a4238]/60 leading-relaxed">
+                   注意：批次修改會直接覆蓋所有選中商品的對應欄位，請確認資料正確。
+                 </p>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isSubmitting}
+                className="w-full py-4 bg-[#4a4238] hover:bg-[#322c26] text-white rounded-full font-black tracking-[0.2em] text-sm transition-all shadow-xl hover:-translate-y-1 disabled:opacity-50"
+              >
+                {isSubmitting ? '正在處理中...' : '確認並全數套用'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Transaction Modal */}
       {isModalOpen && selectedProduct && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
@@ -555,17 +691,16 @@ export default function InventoryPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
                    <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">商品分類 (Category)</label>
-                   <select 
+                   <input 
+                     list="category-options"
                      value={editingProduct.category} 
                      onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} 
                      className="w-full bg-white border-2 border-[#ece4d9] p-3 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm"
-                   >
-                     <option value="樂器">樂器</option>
-                     <option value="樂譜">樂譜</option>
-                     <option value="配件/周邊">配件/周邊</option>
-                     <option value="教材/圖書">教材/圖書</option>
-                     <option value="其他">其他</option>
-                   </select>
+                     placeholder="請輸入或選擇分類..."
+                   />
+                   <datalist id="category-options">
+                     {['樂器', '樂譜', '配件/周邊', '教材/圖書', '其他', ...categoriesList].map(c => <option key={c} value={c} />)}
+                   </datalist>
                 </div>
                 <div className="flex flex-col gap-2">
                    <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">目前庫存 (Stock)</label>
@@ -576,7 +711,18 @@ export default function InventoryPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
                    <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">品牌 / 出版社</label>
-                   <input type="text" required value={editingProduct.brand} onChange={e => setEditingProduct({...editingProduct, brand: e.target.value})} className="w-full bg-white border-2 border-[#ece4d9] p-3 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm" />
+                   <input 
+                     type="text" 
+                     list="brand-options"
+                     required 
+                     value={editingProduct.brand} 
+                     onChange={e => setEditingProduct({...editingProduct, brand: e.target.value})} 
+                     className="w-full bg-white border-2 border-[#ece4d9] p-3 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm" 
+                     placeholder="輸入第一個字自動提示..."
+                   />
+                   <datalist id="brand-options">
+                     {brands.map(b => <option key={b} value={b} />)}
+                   </datalist>
                 </div>
                 <div className="flex flex-col gap-2">
                    <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">品項名稱 (Item Name)</label>
@@ -624,6 +770,33 @@ export default function InventoryPage() {
                 {isSubmitting ? '儲存中...' : '確認儲存'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom duration-300">
+          <div className="bg-[#4a4238] text-white px-8 py-4 rounded-full shadow-2xl border-2 border-white/20 flex items-center gap-6 backdrop-blur-md">
+            <div className="flex flex-col">
+              <p className="text-[10px] font-black tracking-widest opacity-50 uppercase">Selected Items</p>
+              <p className="text-sm font-black tracking-widest">已選擇 {selectedIds.size} 項商品</p>
+            </div>
+            <div className="h-8 w-px bg-white/10"></div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => { setBatchCategory(''); setBatchBrand(''); setIsBatchModalOpen(true); }}
+                className="bg-[#c4a484] hover:bg-[#b08d6d] text-white px-5 py-2 rounded-full text-xs font-black tracking-widest transition-all shadow-lg hover:-translate-y-0.5"
+              >
+                ⚡ 批次修改
+              </button>
+              <button 
+                onClick={() => setSelectedIds(new Set())}
+                className="bg-white/10 hover:bg-white/20 text-white px-5 py-2 rounded-full text-xs font-black tracking-widest transition-all"
+              >
+                取消選擇
+              </button>
+            </div>
           </div>
         </div>
       )}

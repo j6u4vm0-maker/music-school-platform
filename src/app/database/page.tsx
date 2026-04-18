@@ -12,6 +12,7 @@ import { checkLessonsOverlapWithHoliday } from '@/lib/services/schedule';
 import { TEACHER_COLORS, getTeacherColor } from '@/lib/constants/colors';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRouter } from 'next/navigation';
+import Navbar from '@/components/layout/Navbar';
 
 // ============================================================
 // PricingModal — 多段階梯定價設定元件

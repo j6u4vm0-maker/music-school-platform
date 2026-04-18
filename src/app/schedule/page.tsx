@@ -61,6 +61,7 @@ export default function SchedulePage() {
     if (!canEdit || !draggedLesson) return;
 
     try {
+      setIsLoading(true);
       const isSourceLocked = await getDailyClosingStatus(draggedLesson.date);
       if (isSourceLocked) {
         alert("🚫 原始日期已入帳鎖定，無法被移動。");
@@ -106,7 +107,6 @@ export default function SchedulePage() {
     }
 
     const newRoomId = targetRoomId || draggedLesson.classroomId;
-    const newDate = targetDate || draggedLesson.date;
 
     // 取得新的教室名稱
     const newRoom = classrooms.find(c => c.id === newRoomId);
@@ -128,8 +128,6 @@ export default function SchedulePage() {
       return;
     }
 
-    try {
-      setIsLoading(true);
       await updateLessonStatus(draggedLesson.id!, {
         date: newDate,
         startTime,

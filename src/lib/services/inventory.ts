@@ -169,14 +169,32 @@ export const handleInventoryTransaction = async (
       timestamp: now,
     });
 
-    // 4. 新增財務帳本紀錄 (FinancialLedger)
+    // 4. 新增財務帳本紀錄 (FinancialLedger - 庫存專用分帳)
     const newLedgerDocRef = doc(ledgerCol);
     transaction.set(newLedgerDocRef, {
-      transactionId: newInventoryDocRef.id, // 記錄關聯的進銷存單號
+      transactionId: newInventoryDocRef.id,
       type: scenario === 'STOCK_IN' ? 'EXPENSE' : 'REVENUE',
       category: params.accountingCategory,
       amount: params.price * params.qty,
       timestamp: now,
+    });
+
+    // 5. 同步至主財務大帳本 (transactions collection)
+    const mainTxCol = collection(db, 'transactions');
+    const mainTxDocRef = doc(mainTxCol);
+    const dateStr = new Date(now).toISOString().split('T')[0];
+    
+    transaction.set(mainTxDocRef, {
+      userId: 'SYSTEM',
+      userName: '零售/進貨系統',
+      type: scenario === 'STOCK_IN' ? 'EXPENSE' : 'SALES',
+      category: params.accountingCategory,
+      amount: scenario === 'STOCK_IN' ? -(params.price * params.qty) : (params.price * params.qty),
+      description: `[庫存系統] ${scenario === 'STOCK_IN' ? '進貨' : '售出'}: ${productSnap.data().itemName} x ${params.qty}`,
+      date: dateStr,
+      createdAt: now,
+      paymentMethod: 'CASH', // 庫存操作預設為現金處理，若需支援轉帳需擴充 UI
+      refId: newInventoryDocRef.id
     });
   });
 };
