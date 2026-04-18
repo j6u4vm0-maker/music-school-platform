@@ -53,7 +53,7 @@ export default function LedgerPage() {
         const orig = [...lessons];
         setLessons(lessons.map(l => l.id === id ? { ...l, isSigned: true, isSettled: true } : l));
         try {
-          await updateLessonStatus(id, { isSigned: true, isSettled: true });
+          const res = await updateLessonStatus(id, { isSigned: true, isSettled: true });
           await settleLessonTransaction(lesson);
           alert('✅ 簽到結算成功！堂數已扣除，老師薪資已記錄。');
         } catch (err: any) {
@@ -279,6 +279,7 @@ export default function LedgerPage() {
              >
                ▶
              </button>
+            </div>
            </div>
         </div>
 
@@ -477,7 +478,7 @@ export default function LedgerPage() {
                     <span className="text-sm ml-2">TWD</span>
                  </div>
               </div>
-            </div>
+           </div>
           </div>
         </div>
       </>
