@@ -1,6 +1,7 @@
 import { where } from "firebase/firestore";
 import { checkTeacherHoliday } from "./holidays";
 import { Lesson } from "../types/lesson";
+export type { Lesson };
 import * as lessonRepo from "../repositories/lessonRepository";
 
 // Redundant type removed
@@ -133,6 +134,176 @@ export const updateLessonStatus = async (lessonId: string, updates: Partial<Less
 
 export const deleteLesson = async (lessonId: string) => {
   await lessonRepo.deleteLessonRecord(lessonId);
+};
+
+// =========================================================
+// 核心業務流程封裝 (Orchestration Layer)
+// =========================================================
+import { getDailyClosingStatus, unsettleLessonTransaction, settleLessonTransaction } from "./finance";
+
+export const ScheduleService = {
+  /**
+   * 批次建立預約 (包含衝突檢查與關帳檢查)
+   */
+  async createBooking(formData: any, students: any[], teachers: any[], classrooms: any[]) {
+    const { type, studentIdx, teacherIdx, classroomIdx, bookingDate, startTime, endTime, courseName, lessonsCount, payoutLessonsCount, unitPrice, teacherPayout, recurringType, recurringCount, status, remark } = formData;
+    
+    if (startTime >= endTime) throw new Error("結束時間必須晚於開始時間！");
+    
+    const student = type === 'LESSON' ? students[studentIdx as any] : null;
+    const teacher = type === 'LESSON' ? teachers[teacherIdx as any] : null;
+    const classroom = classrooms[classroomIdx as any];
+    
+    const datesToBook = getRecurringDates(bookingDate, recurringType, recurringCount);
+    
+    // 檢查目標日期是否關帳
+    for (const d of datesToBook) {
+       if (await getDailyClosingStatus(d)) throw new Error(`🚫 日期 ${d} 已入帳鎖定，無法新增預約至該日期！`);
+    }
+    
+    // 檢查衝突
+    const conflictResult = await checkConflictsForDates(datesToBook, startTime, endTime, classroom.id!, teacher?.id, student?.id, type);
+    if (conflictResult) {
+       throw new Error(`${conflictResult.date} 衝突警報：\n${conflictResult.error}\n\n週期預約中斷，請調整後再試。`);
+    }
+
+    // 寫入 DB
+    for (const d of datesToBook) {
+      const payload: any = {
+        type,
+        studentId: student?.id || '',
+        studentName: student?.name || '',
+        teacherId: teacher?.id || '',
+        teacherName: teacher?.name || '',
+        classroomId: classroom.id!,
+        classroomName: classroom.name,
+        date: d,
+        startTime, endTime, courseName,
+        lessonsCount: Number(lessonsCount),
+        payoutLessonsCount: Number(payoutLessonsCount),
+        unitPrice: Number(unitPrice),
+        teacherPayout: Number(teacherPayout),
+        status: status as 'NORMAL' | 'LEAVE' | 'CANCELLED',
+        remark: String(remark),
+        paymentMethod: 'UNPAID',
+        accountSuffix: '',
+        isPaid: false,
+        isSigned: false
+      };
+      await addLesson(payload as Lesson);
+    }
+  },
+
+  /**
+   * 更新預約 (包含衝突檢查、關帳檢查、舊紀錄沖銷、新紀錄結算)
+   */
+  async updateBooking(editingLessonId: string, oldLesson: Lesson, formData: any, students: any[], teachers: any[], classrooms: any[]) {
+    const { type, studentIdx, teacherIdx, classroomIdx, bookingDate, startTime, endTime, courseName, lessonsCount, payoutLessonsCount, unitPrice, teacherPayout, status, remark } = formData;
+    
+    if (startTime >= endTime) throw new Error("結束時間必須晚於開始時間！");
+
+    const student = type === 'LESSON' ? students[studentIdx as any] : null;
+    const teacher = type === 'LESSON' ? teachers[teacherIdx as any] : null;
+    const classroom = classrooms[classroomIdx as any];
+
+    // 檢查是否關帳
+    const originLocked = oldLesson ? await getDailyClosingStatus(oldLesson.date) : false;
+    const targetLocked = await getDailyClosingStatus(bookingDate);
+    if (originLocked || targetLocked) {
+       throw new Error("🚫 該日期已入帳鎖定，無法修改預約！");
+    }
+
+    // 檢查單一衝突
+    const conflict = await checkConflict(bookingDate, startTime, endTime, classroom.id!, teacher?.id, student?.id, type, editingLessonId);
+    if (conflict) {
+       throw new Error(`衝突警報：\n${conflict}`);
+    }
+
+    // 執行沖銷
+    if (oldLesson?.isSettled) {
+      await unsettleLessonTransaction(oldLesson);
+    }
+
+    const payload = {
+      type,
+      studentId: student?.id || '',
+      studentName: student?.name || '',
+      teacherId: teacher?.id || '',
+      teacherName: teacher?.name || '',
+      classroomId: classroom.id!,
+      classroomName: classroom.name,
+      date: bookingDate,
+      startTime, endTime, courseName,
+      lessonsCount: Number(lessonsCount),
+      payoutLessonsCount: Number(payoutLessonsCount),
+      unitPrice: Number(unitPrice),
+      teacherPayout: Number(teacherPayout),
+      status: status as 'NORMAL' | 'LEAVE' | 'CANCELLED',
+      remark: String(remark)
+    };
+
+    // 寫入更新
+    await updateLessonStatus(editingLessonId, payload);
+
+    // 若修改前已結算且修改後為正常課程，則重新結算
+    if (oldLesson?.isSettled) {
+      if (payload.status === 'NORMAL' && payload.type === 'LESSON') {
+         await settleLessonTransaction({ id: editingLessonId, ...payload } as Lesson);
+      } else {
+         await updateLessonStatus(editingLessonId, { isSigned: false, isSettled: false });
+      }
+    }
+  },
+
+  /**
+   * 刪除課程 (包含關帳檢查、帳務沖銷)
+   */
+  async deleteBookingWithChecks(lessonId: string, lessonsList: Lesson[]) {
+    const oldLesson = lessonsList.find(l => l.id === lessonId);
+    if (!oldLesson) throw new Error("找不到該筆預約");
+
+    const isLocked = await getDailyClosingStatus(oldLesson.date);
+    if (isLocked) {
+      throw new Error("🚫 該日期已入帳鎖定，無法刪除預約！");
+    }
+
+    if (oldLesson.isSettled) {
+      await unsettleLessonTransaction(oldLesson);
+    }
+
+    await deleteLesson(lessonId);
+  },
+
+  /**
+   * 移動課程 (拖曳修改時間與教室)
+   */
+  async moveBooking(draggedLesson: Lesson, targetDate: string | undefined, targetRoomId: string | undefined, newStartTime: string, newEndTime: string, classrooms: any[]) {
+    const isSourceLocked = await getDailyClosingStatus(draggedLesson.date);
+    if (isSourceLocked) throw new Error("🚫 原始日期已入帳鎖定，無法被移動。");
+
+    const newDate = targetDate || draggedLesson.date;
+    const isTargetLocked = await getDailyClosingStatus(newDate);
+    if (isTargetLocked) throw new Error("🚫 目標日期已入帳鎖定，移入失敗。");
+
+    const newRoomId = targetRoomId || draggedLesson.classroomId;
+    const newRoom = classrooms.find(c => c.id === newRoomId);
+
+    const conflict = await checkConflict(
+      newDate, newStartTime, newEndTime, newRoomId, draggedLesson.teacherId, draggedLesson.studentId, draggedLesson.type, draggedLesson.id
+    );
+
+    if (conflict) {
+      throw new Error(`🚫 無法移動：${conflict}`);
+    }
+
+    await updateLessonStatus(draggedLesson.id!, {
+      date: newDate,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      classroomId: newRoomId,
+      classroomName: newRoom?.name || draggedLesson.classroomName
+    });
+  }
 };
 
 /**

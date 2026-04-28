@@ -42,14 +42,23 @@ export default function BookingModal({
 
   const handleFormChange = async (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
     const { name, value } = e.target;
+    let val: any = value;
+    
+    // Numeric sanitization
+    if (['lessonsCount', 'payoutLessonsCount', 'unitPrice', 'teacherPayout'].includes(name)) {
+      val = value === '' ? 0 : parseFloat(value);
+      if (isNaN(val)) val = 0;
+    }
+
     let nextState = {
       ...formState,
-      [name]: (name === 'lessonsCount' || name === 'payoutLessonsCount' || name === 'unitPrice')
-        ? parseFloat(value)
-        : (name === 'studentIdx' || name === 'teacherIdx' || name === 'classroomIdx')
-          ? parseInt(value)
-          : value
+      [name]: val
     };
+
+    // Index sanitization
+    if (['studentIdx', 'teacherIdx', 'classroomIdx'].includes(name)) {
+      nextState[name] = parseInt(value) || 0;
+    }
 
     // 1. Time & Lessons Count Sync
     if (name === 'startTime' || name === 'endTime') {
@@ -135,13 +144,15 @@ export default function BookingModal({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    
     setIsSubmitting(true);
     try {
       await onSave(formState);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Submit error:", err);
+      alert("儲存失敗：" + (err.message || "未知錯誤"));
     } finally {
       setIsSubmitting(false);
     }
@@ -370,7 +381,11 @@ export default function BookingModal({
           )}
 
           {canEdit && (
-            <button type="submit" disabled={isSubmitting} className={`mt-4 font-bold tracking-[0.3em] py-5 px-6 rounded-full shadow-xl transition-all text-white flex items-center justify-center gap-2 ${formState.type === 'RENTAL' ? 'bg-[#c4a484] hover:bg-[#b09070]' : 'bg-[#4a4238] hover:bg-[#363028]'}`}>
+            <button 
+              type="submit" 
+              disabled={isSubmitting} 
+              className={`mt-4 font-bold tracking-[0.3em] py-5 px-6 rounded-full shadow-xl transition-all text-white flex items-center justify-center gap-2 ${formState.type === 'RENTAL' ? 'bg-[#c4a484] hover:bg-[#b09070]' : 'bg-[#4a4238] hover:bg-[#363028]'}`}
+            >
               {isSubmitting ? '系統處理中...' : (editingLessonId ? '儲存並更新變更' : '確認並建立預約紀錄')}
             </button>
           )}
