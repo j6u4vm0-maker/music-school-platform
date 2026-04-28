@@ -7,7 +7,8 @@ import {
   handleInventoryTransaction,
   addProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  clearAllInventoryData
 } from '@/lib/services/inventory';
 import { exportToExcel, importFromExcel } from '@/lib/utils/excel';
 
@@ -116,6 +117,19 @@ export const useInventory = (profileName: string) => {
     }
   };
 
+  const handleClearAllData = async () => {
+    if (confirm('⚠️ 警告：這將會清除所有商品資料、進銷存紀錄以及相關財務報表，且無法復原！確定要繼續嗎？')) {
+      setIsLoading(true);
+      try {
+        await clearAllInventoryData();
+        alert('已成功清除所有庫存與測試資料');
+      } catch (err) {
+        alert('清除失敗，請檢查權限');
+      }
+      setIsLoading(false);
+    }
+  };
+
   const handleBatchUpdate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (selectedIds.size === 0) return;
@@ -183,6 +197,8 @@ export const useInventory = (profileName: string) => {
 
   const brands = useMemo(() => Array.from(new Set(products.map(p => p.brand).filter(Boolean))).sort(), [products]);
   const categoriesList = useMemo(() => Array.from(new Set(products.map(p => p.category).filter(Boolean))).sort(), [products]);
+  const originsList = useMemo(() => Array.from(new Set(products.map(p => p.origin).filter(Boolean))).sort(), [products]);
+  const materialsList = useMemo(() => Array.from(new Set(products.map(p => p.material).filter(Boolean))).sort(), [products]);
 
   const filteredProducts = useMemo(() => products.filter(p => {
     const query = searchQuery.toLowerCase();
@@ -212,9 +228,9 @@ export const useInventory = (profileName: string) => {
     batchCategory, setBatchCategory,
     batchBrand, setBatchBrand,
     openTxModal, submitTransaction, openProductModal,
-    handleProductSubmit, handleDeleteProduct, handleBatchUpdate,
+    handleProductSubmit, handleDeleteProduct, handleBatchUpdate, handleClearAllData,
     toggleSelect, toggleSelectAll, handleExport, handleImport,
     totalRevenue, totalExpense, netProfit,
-    brands, categoriesList, filteredProducts
+    brands, categoriesList, originsList, materialsList, filteredProducts
   };
 };

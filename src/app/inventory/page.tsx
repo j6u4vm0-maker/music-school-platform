@@ -37,7 +37,7 @@ export default function InventoryPage() {
     handleProductSubmit, handleDeleteProduct, handleBatchUpdate,
     toggleSelect, toggleSelectAll, handleExport,
     totalRevenue, totalExpense, netProfit,
-    brands, categoriesList, filteredProducts
+    brands, categoriesList, originsList, materialsList, filteredProducts
   } = inventory;
 
   const handleImportUI = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,11 +65,30 @@ export default function InventoryPage() {
           searchQuery={searchQuery} setSearchQuery={setSearchQuery}
           brandFilter={brandFilter} setBrandFilter={setBrandFilter}
           brands={brands} isLoading={isLoading} canEdit={canEdit}
+          categoriesList={categoriesList} originsList={originsList} materialsList={materialsList}
           openTxModal={openTxModal} openProductModal={openProductModal}
           handleDeleteProduct={handleDeleteProduct} handleExport={handleExport}
           handleImportClick={() => fileInputRef.current?.click()}
         />
         <input type="file" ref={fileInputRef} onChange={handleImportUI} hidden accept=".xlsx, .xls" />
+
+        {canEdit && (
+          <div className="w-full max-w-7xl mt-10 p-8 rounded-[40px] bg-red-50/30 border-2 border-red-100 border-dashed flex flex-col items-center gap-4 animate-in fade-in duration-1000">
+            <div className="flex items-center gap-3 text-red-500/60">
+              <span className="text-2xl">⚠️</span>
+              <h4 className="font-black tracking-[0.2em] text-sm uppercase">管理員維護專區</h4>
+            </div>
+            <p className="text-xs font-bold text-red-400/70 tracking-widest text-center">
+              此功能僅供測試階段使用，將會清除所有庫存、進銷存紀錄及相關財務報表
+            </p>
+            <button 
+              onClick={inventory.handleClearAllData}
+              className="mt-2 px-8 py-3 bg-white border-2 border-red-200 text-red-500 hover:bg-red-500 hover:text-white rounded-full text-xs font-black tracking-[0.2em] transition-all shadow-sm active:scale-95"
+            >
+              🔥 清除所有測試資料 (進銷存、紀錄、報表)
+            </button>
+          </div>
+        )}
       </div>
 
       <ProductModal 

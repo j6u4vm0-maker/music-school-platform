@@ -13,6 +13,9 @@ interface ProductTableProps {
   brandFilter: string;
   setBrandFilter: (b: string) => void;
   brands: string[];
+  categoriesList: string[];
+  originsList: string[];
+  materialsList: string[];
   isLoading: boolean;
   canEdit: boolean;
   openTxModal: (p: Product, type: 'STOCK_IN' | 'SALES') => void;
@@ -34,6 +37,9 @@ export default function ProductTable({
   brandFilter,
   setBrandFilter,
   brands,
+  categoriesList,
+  originsList,
+  materialsList,
   isLoading,
   canEdit,
   openTxModal,
@@ -92,8 +98,6 @@ export default function ProductTable({
       <div className="overflow-x-auto rounded-2xl border-2 border-[#ece4d9] bg-white/50 backdrop-blur-sm">
         {isLoading ? (
            <div className="p-12 text-center text-[#4a4238]/40 font-black tracking-widest animate-pulse">載入中...</div>
-        ) : filteredProducts.length === 0 ? (
-           <div className="p-12 text-center text-[#4a4238]/40 font-black tracking-widest">找不到相符的商品資料</div>
         ) : (
           <table className="w-full text-left font-sans text-[#4a4238]/90 min-w-[1400px]">
             <thead className="bg-[#ece4d9]/50 text-[#4a4238] uppercase tracking-widest text-[10px] font-black border-b-2 border-[#ece4d9]">
@@ -108,11 +112,27 @@ export default function ProductTable({
                 </th>
                 <th className="py-4 px-6 w-32">
                   分類
-                  <input type="text" placeholder="篩選..." value={columnFilters.category} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, category: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
+                  <select 
+                    value={columnFilters.category} 
+                    onClick={e => e.stopPropagation()} 
+                    onChange={e => setColumnFilters({...columnFilters, category: e.target.value})} 
+                    className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-3 py-2 pr-8 focus:outline-none focus:border-[#c4a484] text-xs cursor-pointer shadow-sm hover:border-[#c4a484]/50 transition-colors min-w-[90px]"
+                  >
+                    <option value="">全部</option>
+                    {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </th>
                 <th className="py-4 px-6 w-40">
                   品牌 / 出版社
-                  <input type="text" placeholder="篩選..." value={columnFilters.brand} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, brand: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
+                  <select 
+                    value={columnFilters.brand} 
+                    onClick={e => e.stopPropagation()} 
+                    onChange={e => setColumnFilters({...columnFilters, brand: e.target.value})} 
+                    className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-3 py-2 pr-8 focus:outline-none focus:border-[#c4a484] text-xs cursor-pointer shadow-sm hover:border-[#c4a484]/50 transition-colors min-w-[90px]"
+                  >
+                    <option value="">全部</option>
+                    {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
                 </th>
                 <th className="py-4 px-6 w-56">
                   品項名稱
@@ -120,11 +140,27 @@ export default function ProductTable({
                 </th>
                 <th className="py-4 px-6 w-32">
                   產地
-                  <input type="text" placeholder="篩選..." value={columnFilters.origin} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, origin: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
+                  <select 
+                    value={columnFilters.origin} 
+                    onClick={e => e.stopPropagation()} 
+                    onChange={e => setColumnFilters({...columnFilters, origin: e.target.value})} 
+                    className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-3 py-2 pr-8 focus:outline-none focus:border-[#c4a484] text-xs cursor-pointer shadow-sm hover:border-[#c4a484]/50 transition-colors min-w-[90px]"
+                  >
+                    <option value="">全部</option>
+                    {originsList.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
                 </th>
                 <th className="py-4 px-6 w-40">
                   材質 / 特色
-                  <input type="text" placeholder="篩選..." value={columnFilters.material} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, material: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
+                  <select 
+                    value={columnFilters.material} 
+                    onClick={e => e.stopPropagation()} 
+                    onChange={e => setColumnFilters({...columnFilters, material: e.target.value})} 
+                    className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-3 py-2 pr-8 focus:outline-none focus:border-[#c4a484] text-xs cursor-pointer shadow-sm hover:border-[#c4a484]/50 transition-colors min-w-[90px]"
+                  >
+                    <option value="">全部</option>
+                    {materialsList.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
                 </th>
                 <th className="py-4 px-6 text-right w-24">進價</th>
                 <th className="py-4 px-6 text-right w-24">售價</th>
@@ -139,73 +175,81 @@ export default function ProductTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#ece4d9]/50">
-              {filteredProducts.map(p => (
-                <tr key={p.productId} className={`hover:bg-white/80 transition-colors ${selectedIds.has(p.productId!) ? 'bg-[#c4a484]/5' : ''}`}>
-                  <td className="py-4 px-6 text-center">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedIds.has(p.productId!)}
-                      onChange={() => toggleSelect(p.productId!)}
-                      className="w-4 h-4 rounded border-[#ece4d9] text-[#c4a484] focus:ring-[#c4a484]"
-                    />
-                  </td>
-                  <td className="py-4 px-6">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.category === '樂譜' ? 'bg-indigo-100 text-indigo-600' : p.category === '樂器' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600'}`}>
-                      {p.category || '未分類'}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 font-bold text-xs opacity-70">{p.brand}</td>
-                  <td className="py-4 px-6 font-black text-sm">{p.itemName}</td>
-                  <td className="py-4 px-6 text-xs opacity-60">{p.origin || '-'}</td>
-                  <td className="py-4 px-6 text-xs italic opacity-70">{p.material || '-'}</td>
-                  <td className="py-4 px-6 text-right font-mono text-xs opacity-60">${p.costPrice}</td>
-                  <td className="py-4 px-6 text-right font-mono text-sm font-bold text-[#c4a484]">${p.sellPrice}</td>
-                  <td className="py-4 px-6 text-right font-mono text-xs font-bold text-emerald-600/80">${p.profit}</td>
-                  <td className="py-4 px-6 text-center">
-                     <span className={`inline-block px-3 py-1 rounded-full text-xs font-black font-mono ${p.stockQty <= p.minStock ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-[#ece4d9] text-[#4a4238]'}`}>
-                        {p.stockQty}
-                     </span>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                     <span className="inline-block px-3 py-1 rounded-full bg-white border border-[#ece4d9] text-[#4a4238]/50 text-xs font-black font-mono">
-                        {p.minStock}
-                     </span>
-                  </td>
-                  <td className="py-4 px-6 text-xs opacity-50 truncate max-w-[150px]" title={p.note}>{p.note || '-'}</td>
-                  <td className="py-4 px-6 relative z-10 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-10px_0_15px_rgba(0,0,0,0.02)]">
-                    <div className="flex flex-wrap gap-1.5 justify-center">
-                      <button 
-                        onClick={() => openTxModal(p, 'SALES')}
-                        className="bg-[#c4a480]/10 hover:bg-[#c4a480]/20 text-[#c4a480] border border-[#c4a480]/30 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
-                      >
-                        💰 售出
-                      </button>
-                      {canEdit && (
-                        <>
-                          <button 
-                            onClick={() => openTxModal(p, 'STOCK_IN')}
-                            className="bg-[#4a4238]/5 hover:bg-[#4a4238]/10 text-[#4a4238] border border-[#4a4238]/20 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
-                          >
-                            📥 進貨
-                          </button>
-                          <button 
-                            onClick={() => openProductModal(p)}
-                            className="bg-blue-50 hover:bg-blue-100 text-blue-500 border border-blue-200 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
-                          >
-                            ✎ 編輯
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteProduct(p.productId!)}
-                            className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
-                          >
-                            ✕
-                          </button>
-                        </>
-                      )}
-                    </div>
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={13} className="p-12 text-center text-[#4a4238]/40 font-black tracking-widest">
+                    找不到相符的商品資料
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredProducts.map(p => (
+                  <tr key={p.productId} className={`hover:bg-white/80 transition-colors ${selectedIds.has(p.productId!) ? 'bg-[#c4a484]/5' : ''}`}>
+                    <td className="py-4 px-6 text-center">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.has(p.productId!)}
+                        onChange={() => toggleSelect(p.productId!)}
+                        className="w-4 h-4 rounded border-[#ece4d9] text-[#c4a484] focus:ring-[#c4a484]"
+                      />
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm border ${p.category === '樂譜' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : p.category === '樂器' ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-gray-50 text-gray-600 border-gray-100'}`}>
+                        {p.category || '未分類'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 font-bold text-xs opacity-70">{p.brand}</td>
+                    <td className="py-4 px-6 font-black text-sm">{p.itemName}</td>
+                    <td className="py-4 px-6 text-xs opacity-60">{p.origin || '-'}</td>
+                    <td className="py-4 px-6 text-xs italic opacity-70">{p.material || '-'}</td>
+                    <td className="py-4 px-6 text-right font-mono text-xs opacity-60">${p.costPrice}</td>
+                    <td className="py-4 px-6 text-right font-mono text-sm font-bold text-[#c4a484]">${p.sellPrice}</td>
+                    <td className="py-4 px-6 text-right font-mono text-xs font-bold text-emerald-600/80">${p.profit}</td>
+                    <td className="py-4 px-6 text-center">
+                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-black font-mono ${p.stockQty <= p.minStock ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-[#ece4d9] text-[#4a4238]'}`}>
+                          {p.stockQty}
+                       </span>
+                    </td>
+                    <td className="py-4 px-6 text-center">
+                       <span className="inline-block px-3 py-1 rounded-full bg-white border border-[#ece4d9] text-[#4a4238]/50 text-xs font-black font-mono">
+                          {p.minStock}
+                       </span>
+                    </td>
+                    <td className="py-4 px-6 text-xs opacity-50 truncate max-w-[150px]" title={p.note}>{p.note || '-'}</td>
+                    <td className="py-4 px-6 relative z-10 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-10px_0_15px_rgba(0,0,0,0.02)]">
+                      <div className="flex flex-wrap gap-1.5 justify-center">
+                        <button 
+                          onClick={() => openTxModal(p, 'SALES')}
+                          className="bg-[#c4a480]/10 hover:bg-[#c4a480]/20 text-[#c4a480] border border-[#c4a480]/30 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
+                        >
+                          💰 售出
+                        </button>
+                        {canEdit && (
+                          <>
+                            <button 
+                              onClick={() => openTxModal(p, 'STOCK_IN')}
+                              className="bg-[#4a4238]/5 hover:bg-[#4a4238]/10 text-[#4a4238] border border-[#4a4238]/20 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
+                            >
+                              📥 進貨
+                            </button>
+                            <button 
+                              onClick={() => openProductModal(p)}
+                              className="bg-blue-50 hover:bg-blue-100 text-blue-500 border border-blue-200 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
+                            >
+                              ✎ 編輯
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteProduct(p.productId!)}
+                              className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         )}

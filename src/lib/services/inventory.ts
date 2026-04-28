@@ -4,7 +4,11 @@ import { db } from '../firebase';
 import {
   doc,
   runTransaction,
-  collection
+  collection,
+  deleteDoc,
+  getDocs,
+  query,
+  where
 } from 'firebase/firestore';
 import { Product } from '../types/inventory';
 import * as inventoryRepo from '../repositories/inventoryRepository';
@@ -155,4 +159,34 @@ export const handleInventoryTransaction = async (
       refId: newInventoryDocRef.id
     });
   });
+};
+
+/**
+ * 清除所有庫存與進銷存測試資料
+ * 注意：此操作不可逆，僅用於清除測試資料
+ */
+export const clearAllInventoryData = async () => {
+  const products = await getProducts();
+  const invTxs = await getInventoryTransactions();
+  const ledgers = await inventoryRepo.fetchFinancialLedgers();
+
+  // 1. 刪除所有商品
+  const pPromises = products.map(p => deleteProduct(p.productId!));
+  
+  // 2. 刪除所有進銷存紀錄
+  const invPromises = invTxs.map(tx => deleteDoc(doc(db, 'inventory_transactions', tx.id)));
+  
+  // 3. 刪除所有庫存分帳
+  const ledgerPromises = ledgers.map(l => deleteDoc(doc(db, 'financial_ledgers', l.id)));
+  
+  // 4. 刪除主帳本中屬於零售系統的紀錄
+  const mainTxSnap = await getDocs(query(collection(db, 'transactions'), where('userName', '==', '零售/進貨系統')));
+  const mainTxPromises = mainTxSnap.docs.map(d => deleteDoc(doc(db, 'transactions', d.id)));
+
+  await Promise.all([
+    ...pPromises,
+    ...invPromises,
+    ...ledgerPromises,
+    ...mainTxPromises
+  ]);
 };
