@@ -29,6 +29,11 @@ export const FinanceRepository = {
     return docRef.id;
   },
 
+  async getTransaction(id: string): Promise<Transaction | null> {
+    const snap = await getDoc(doc(db, TX_COLLECTION, id));
+    return snap.exists() ? { id: snap.id, ...snap.data() } as Transaction : null;
+  },
+
   async getTransactions(): Promise<Transaction[]> {
     const q = query(collection(db, TX_COLLECTION), orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);

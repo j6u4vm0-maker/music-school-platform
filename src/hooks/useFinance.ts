@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { 
-  getTransactions, 
-  addTransaction, 
-  updateStudentBalance, 
-  getCategories, 
-  addCategory, 
-  deleteCategory, 
-  updateTransaction, 
-  deleteTransaction 
+import {
+  getTransactions,
+  addTransaction,
+  updateStudentBalance,
+  getCategories,
+  addCategory,
+  deleteCategory,
+  updateTransaction,
+  deleteTransaction
 } from '@/lib/services/finance';
 import { getStudents, getTeachers } from '@/lib/services/db';
 import { Student, Teacher } from '@/lib/types/user';
@@ -22,7 +22,7 @@ export const useFinance = (canEdit: boolean) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'TOP_UP' | 'TEACHER_PAYOUT' | 'EXPENSE' | 'OTHER_INCOME'>('TOP_UP');
-  
+
   const [categories, setCategories] = useState<string[]>([]);
   const [filterRange, setFilterRange] = useState<'ALL' | 'WEEK' | 'MONTH' | 'CUSTOM'>('ALL');
   const [startDate, setStartDate] = useState<string>('');
@@ -45,7 +45,7 @@ export const useFinance = (canEdit: boolean) => {
     try {
       const txs = await getTransactions();
       setTransactions(txs);
-      
+
       const accrued = await getMonthTeacherStats(analyticsMonth);
       setMonthAccruedStats(accrued as any);
 
@@ -54,8 +54,8 @@ export const useFinance = (canEdit: boolean) => {
 
       setCategories(await getCategories());
       if (students.length === 0) {
-          setStudents(await getStudents());
-          setTeachers(await getTeachers());
+        setStudents(await getStudents());
+        setTeachers(await getTeachers());
       }
     } catch (e) {
       console.error(e);
@@ -155,30 +155,30 @@ export const useFinance = (canEdit: boolean) => {
     const tDate = new Date(t.date);
     const now = new Date();
     if (filterRange === 'WEEK') {
-        const diff = (now.getTime() - tDate.getTime()) / (1000 * 3600 * 24);
-        return diff <= 7;
+      const diff = (now.getTime() - tDate.getTime()) / (1000 * 3600 * 24);
+      return diff <= 7;
     }
     if (filterRange === 'MONTH') {
-        return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
+      return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
     }
     if (filterRange === 'CUSTOM') {
-        if (!startDate || !endDate) return true;
-        return t.date >= startDate && t.date <= endDate;
+      if (!startDate || !endDate) return true;
+      return t.date >= startDate && t.date <= endDate;
     }
     return true;
   })
-  .filter(t => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    const category = (t.category || (t.type === 'TOP_UP' ? '課程營收' : '一般項目')).toLowerCase();
-    const userName = (t.userName || '').toLowerCase();
-    const description = (t.description || '').toLowerCase();
-    return category.includes(q) || userName.includes(q) || description.includes(q);
-  })
-  .sort((a, b) => {
-    if (sortOrder === 'ASC') return a.date.localeCompare(b.date);
-    return b.date.localeCompare(a.date);
-  });
+    .filter(t => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      const category = (t.category || (t.type === 'TOP_UP' ? '課程營收' : '一般項目')).toLowerCase();
+      const userName = (t.userName || '').toLowerCase();
+      const description = (t.description || '').toLowerCase();
+      return category.includes(q) || userName.includes(q) || description.includes(q);
+    })
+    .sort((a, b) => {
+      if (sortOrder === 'ASC') return a.date.localeCompare(b.date);
+      return b.date.localeCompare(a.date);
+    });
 
   const handleSaveTransaction = async (formData: any) => {
     const { amount, description, paymentMethod, accountSuffix, category: formCategory, targetIdx, topUpLessons, topUpTeacherId, topUpInstrument, calculatedAmount } = formData;
@@ -225,7 +225,7 @@ export const useFinance = (canEdit: boolean) => {
           await updateTransaction(editingTx.id!, {
             userId: teacher.id!,
             userName: teacher.name,
-            amount: -Math.abs(amount), 
+            amount: -Math.abs(amount),
             description: description,
             paymentMethod,
             accountSuffix
@@ -236,7 +236,7 @@ export const useFinance = (canEdit: boolean) => {
             userName: teacher.name,
             type: 'TEACHER_PAYOUT',
             category: '教師薪資',
-            amount: -Math.abs(amount), 
+            amount: -Math.abs(amount),
             description: description,
             paymentMethod,
             accountSuffix,
@@ -248,7 +248,7 @@ export const useFinance = (canEdit: boolean) => {
       } else if (modalType === 'EXPENSE') {
         if (editingTx) {
           await updateTransaction(editingTx.id!, {
-            amount: -Math.abs(amount), 
+            amount: -Math.abs(amount),
             description: description,
             category: formCategory,
             paymentMethod,
@@ -260,7 +260,7 @@ export const useFinance = (canEdit: boolean) => {
             userName: '營運系統',
             type: 'EXPENSE',
             category: formCategory,
-            amount: -Math.abs(amount), 
+            amount: -Math.abs(amount),
             description: description,
             paymentMethod,
             accountSuffix,
@@ -300,7 +300,7 @@ export const useFinance = (canEdit: boolean) => {
           } as Transaction);
         }
       }
-      
+
       setIsModalOpen(false);
       setEditingTx(null);
       await fetchData();

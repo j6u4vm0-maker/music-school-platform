@@ -7,6 +7,7 @@
 import { Lesson } from '../types/lesson';
 import { Transaction } from '../types/finance';
 import { FinanceRepository } from '../repositories/financeRepository';
+import { revertInventoryTransaction, updateInventoryTransactionAmount } from './inventory';
 
 // ── Transactions ─────────────────────────────────────────────
 
@@ -21,11 +22,24 @@ export const getTransactions = async (): Promise<Transaction[]> => {
   return await FinanceRepository.getTransactions();
 };
 
-export const updateTransaction = async (id: string, transaction: Partial<Transaction>) => {
-  await FinanceRepository.updateTransaction(id, transaction);
+export const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+  // 1. 檢查是否連動進銷存
+  const tx = await FinanceRepository.getTransaction(id);
+  if (tx && tx.refId && tx.userName === '零售/進貨系統' && updates.amount !== undefined) {
+    await updateInventoryTransactionAmount(tx.refId, updates.amount);
+  }
+  
+  await FinanceRepository.updateTransaction(id, updates);
 };
 
 export const deleteTransaction = async (id: string) => {
+  // 1. 檢查是否連動進銷存
+  const tx = await FinanceRepository.getTransaction(id);
+  if (tx && tx.refId && tx.userName === '零售/進貨系統') {
+    await revertInventoryTransaction(tx.refId);
+    // revertInventoryTransaction 內部會刪除 tx，但為了保險起見這裡也呼叫
+  }
+  
   await FinanceRepository.deleteTransaction(id);
 };
 

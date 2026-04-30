@@ -21,6 +21,14 @@ import {
 import { getTeacherColor, TEACHER_COLORS } from '@/lib/constants/colors';
 import { useAuth } from '@/components/providers/AuthProvider';
 
+// ── 輔助方法：獲取本地日期字串 (YYYY-MM-DD) ───────────────────────
+const toLocalDateString = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // ── 組件：衝突清單 ──────────────────────────────────────────────
 function ConflictList({ lessons }: { lessons: Lesson[] }) {
   if (lessons.length === 0) return null;
@@ -113,8 +121,8 @@ function HolidaysContent() {
     setIsLoading(true);
     const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    const startStr = firstDay.toISOString().split('T')[0];
-    const endStr = lastDay.toISOString().split('T')[0];
+    const startStr = toLocalDateString(firstDay);
+    const endStr = toLocalDateString(lastDay);
 
     try {
         const [hData, lData] = await Promise.all([
@@ -152,7 +160,7 @@ function HolidaysContent() {
     
     let curr = new Date(start);
     while (curr <= end) {
-      const dateStr = curr.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(curr);
       if (mode === 'RECURRING') {
         if (selectedWeekdays.includes(curr.getDay())) {
           dates.push({ date: dateStr, halfDay });
@@ -287,7 +295,7 @@ function HolidaysContent() {
     // 填充日期
     for (let i = 1; i <= daysInMonth; i++) {
       const d = new Date(year, month, i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = toLocalDateString(d);
       days.push({
         day: i,
         date: dateStr,

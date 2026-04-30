@@ -8,7 +8,8 @@ import {
   deleteDoc,
   getDocs,
   query,
-  where
+  where,
+  updateDoc
 } from 'firebase/firestore';
 import { Product } from '../types/inventory';
 import * as inventoryRepo from '../repositories/inventoryRepository';
@@ -160,6 +161,50 @@ export const handleInventoryTransaction = async (
     });
   });
 };
+
+/**
+ * 任務四：進銷存連動沖銷 (Revert / Delete)
+ * 當財務報表刪除一筆與庫存相關的紀錄時，需同步恢復庫存。
+ */
+export const revertInventoryTransaction = async (inventoryTxId: string) => {
+  const invDocRef = doc(db, 'inventory_transactions', inventoryTxId);
+  
+  await runTransaction(db, async (transaction) => {
+    const invSnap = await transaction.get(invDocRef);
+    if (!invSnap.exists()) return;
+
+    const invData = invSnap.data();
+    const productId = invData.productId;
+    const qtyChange = invData.qtyChange; // 售出為負，進貨為正
+
+    // 1. 恢復庫存 (反向操作)
+    const productRef = doc(db, 'products', productId);
+    const productSnap = await transaction.get(productRef);
+    if (productSnap.exists()) {
+      const currentStock = productSnap.data().stockQty || 0;
+      transaction.update(productRef, { stockQty: currentStock - qtyChange });
+    }
+
+    // 2. 刪除進銷存紀錄
+    transaction.delete(invDocRef);
+
+    // 3. 刪除關聯的庫存分帳 (FinancialLedger)
+    const ledgerSnap = await getDocs(query(collection(db, 'financial_ledgers'), where('transactionId', '==', inventoryTxId)));
+    ledgerSnap.docs.forEach(d => transaction.delete(d.ref));
+  });
+};
+
+/**
+ * 更新進銷存關聯金額
+ */
+export const updateInventoryTransactionAmount = async (inventoryTxId: string, newAmount: number) => {
+  const ledgerSnap = await getDocs(query(collection(db, 'financial_ledgers'), where('transactionId', '==', inventoryTxId)));
+  if (!ledgerSnap.empty) {
+    const ledgerId = ledgerSnap.docs[0].id;
+    await updateDoc(doc(db, 'financial_ledgers', ledgerId), { amount: Math.abs(newAmount) });
+  }
+};
+
 
 /**
  * 清除所有庫存與進銷存測試資料

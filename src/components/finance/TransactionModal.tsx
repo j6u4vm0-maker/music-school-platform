@@ -27,7 +27,7 @@ export default function TransactionModal({
   canEdit
 }: TransactionModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Internal form state
   const [amount, setAmount] = useState<number>(0);
   const [description, setDescription] = useState('');
@@ -52,7 +52,7 @@ export default function TransactionModal({
         setPaymentMethod(editingTx.paymentMethod || 'CASH');
         setAccountSuffix(editingTx.accountSuffix || '');
         setCategory(editingTx.category || '');
-        
+
         if (modalType === 'TOP_UP') {
           const sIdx = students.findIndex(s => s.id === editingTx.userId);
           setTargetIdx(sIdx !== -1 ? sIdx : 0);
@@ -68,7 +68,7 @@ export default function TransactionModal({
         setAccountSuffix('');
         setCategory(modalType === 'EXPENSE' ? categories.filter(c => !["課程營收", "樂器買賣", "場地租借", "樂譜販售", "其他收入"].includes(c))[0] || '' : categories[0] || '');
         setTargetIdx(0);
-        
+
         setTopUpTeacher(null);
         setTopUpInstrument('');
         setTopUpPricing(null);
@@ -204,8 +204,8 @@ export default function TransactionModal({
                       <p className="text-[10px] font-black tracking-[0.2em] text-[#4a4238]/50 mb-3">📊 定價階梯</p>
                       <div className="flex flex-wrap gap-2">
                         {topUpPricing.tiers.map((tier, i) => {
-                          const nextMin = topUpPricing.tiers[i+1]?.minLessons;
-                          const label = nextMin ? `${tier.minLessons}~${nextMin-1} 堂` : `${tier.minLessons}+ 堂`;
+                          const nextMin = topUpPricing.tiers[i + 1]?.minLessons;
+                          const label = nextMin ? `${tier.minLessons}~${nextMin - 1} 堂` : `${tier.minLessons}+ 堂`;
                           const isActive = topUpLessons >= tier.minLessons && (!nextMin || topUpLessons < nextMin);
                           return (
                             <span key={i} className={`px-3 py-1 rounded-full text-xs font-black border transition-all ${isActive ? 'bg-[#4a4238] text-white border-[#4a4238]' : 'bg-white text-[#4a4238] border-[#ece4d9]'}`}>
@@ -294,9 +294,9 @@ export default function TransactionModal({
               <div>
                 <label className="block text-sm font-black tracking-[0.2em] text-[#4a4238] mb-3">支出科目 (會計科目)</label>
                 <select required value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-white border-2 border-[#ece4d9] rounded-2xl px-5 py-4 font-bold text-lg text-[#4a4238]">
-                   {categories.filter(c => !["課程營收", "樂器買賣", "場地租借", "樂譜販售", "其他收入"].includes(c)).map(c => (
-                     <option key={c} value={c}>{c}</option>
-                   ))}
+                  {categories.filter(c => !["課程營收", "樂器買賣", "場地租借", "樂譜販售", "其他收入"].includes(c)).map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
               <div>

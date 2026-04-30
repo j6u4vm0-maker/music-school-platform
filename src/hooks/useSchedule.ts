@@ -13,7 +13,7 @@ import { exportToExcel, importFromExcel } from '@/lib/utils/excel';
 import { getDailyClosingStatus, unsettleLessonTransaction } from '@/lib/services/finance';
 
 export const useSchedule = (canEdit: boolean) => {
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [viewMode, setViewMode] = useState<'ROOM' | 'WEEK'>('ROOM');
 
@@ -152,7 +152,7 @@ export const useSchedule = (canEdit: boolean) => {
     for (let i = 0; i < 7; i++) {
       const next = new Date(monday);
       next.setDate(monday.getDate() + i);
-      dates.push(next.toISOString().split('T')[0]);
+      dates.push(next.toLocaleDateString('en-CA'));
     }
     return { start: dates[0], end: dates[6], all: dates };
   };
@@ -186,7 +186,7 @@ export const useSchedule = (canEdit: boolean) => {
     const d = new Date(date);
     const delta = viewMode === 'WEEK' ? 7 * direction : direction;
     d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(d.toLocaleDateString('en-CA'));
   };
 
   const getOverlappingLayout = (dayLessons: Lesson[]) => {

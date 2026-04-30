@@ -3,7 +3,7 @@ import { getLessonsByDate, updateLessonStatus, Lesson } from '@/lib/services/sch
 import { getDailyClosingStatus, setDailyClosingStatus, settleLessonTransaction } from '@/lib/services/finance';
 
 export const useLedger = (canEdit: boolean, userId: string) => {
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -117,7 +117,7 @@ export const useLedger = (canEdit: boolean, userId: string) => {
   const shiftDate = (days: number) => {
     const d = new Date(date);
     d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(d.toLocaleDateString('en-CA'));
     setSelectedIds(new Set());
   };
 
