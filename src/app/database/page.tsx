@@ -10,6 +10,127 @@ import { useDatabase } from '@/hooks/useDatabase';
 import { TeacherInstrumentPricing } from '@/lib/services/pricing';
 
 // ============================================================
+// EnrollmentEditor
+// ============================================================
+function EnrollmentEditor({
+  enrollments,
+  teachers,
+  setEnrollments
+}: {
+  enrollments: any[];
+  teachers: Teacher[];
+  setEnrollments: React.Dispatch<React.SetStateAction<any[]>>;
+}) {
+  const addEnrollment = () => {
+    setEnrollments([...enrollments, { instrument: '', teacherId: '', teacherName: '', remainingLessons: 0, balance: 0 }]);
+  };
+
+  const removeEnrollment = (index: number) => {
+    setEnrollments(enrollments.filter((_, i) => i !== index));
+  };
+
+  const updateEnrollment = (index: number, field: string, value: any) => {
+    setEnrollments(enrollments.map((en, i) => {
+      if (i === index) {
+        const updated = { ...en, [field]: value };
+        if (field === 'teacherId') {
+          const t = teachers.find(teacher => teacher.id === value);
+          updated.teacherName = t?.name || '';
+          updated.instrument = ''; // Reset instrument when teacher changes
+        }
+        return updated;
+      }
+      return en;
+    }));
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-between items-center px-1">
+        <label className="text-xs font-black tracking-[0.2em] text-[#4a4238] uppercase">📖 選修科目配置</label>
+        <button
+          type="button"
+          onClick={addEnrollment}
+          className="text-[10px] font-black text-[#c4a484] bg-[#c4a484]/10 hover:bg-[#c4a484]/20 px-3 py-1 rounded-full tracking-widest transition-all"
+        >
+          ＋ 新增科目
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+        {enrollments.length === 0 && (
+          <div className="text-center py-6 bg-white/50 rounded-2xl border border-dashed border-[#ece4d9] text-[10px] font-bold text-[#4a4238]/40 tracking-widest">
+            尚未配置任何選修科目
+          </div>
+        )}
+        {enrollments.map((en, i) => (
+          <div key={i} className="bg-white p-4 rounded-2xl border border-[#ece4d9] shadow-sm relative group animate-in slide-in-from-right-4 duration-300">
+            <button
+              type="button"
+              onClick={() => removeEnrollment(i)}
+              className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center rounded-full bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+            >
+              <span className="text-xs">✕</span>
+            </button>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-tighter">授課教師</label>
+                <select
+                  value={en.teacherId}
+                  onChange={(e) => updateEnrollment(i, 'teacherId', e.target.value)}
+                  className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-xl px-3 py-2 text-xs font-bold text-[#4a4238] focus:ring-2 ring-[#c4a484]/20 outline-none"
+                >
+                  <option value="">選擇教師</option>
+                  {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-tighter">授課科目</label>
+                <select
+                  value={en.instrument}
+                  onChange={(e) => updateEnrollment(i, 'instrument', e.target.value)}
+                  disabled={!en.teacherId}
+                  className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-xl px-3 py-2 text-xs font-bold text-[#4a4238] disabled:opacity-30 focus:ring-2 ring-[#c4a484]/20 outline-none"
+                >
+                  <option value="">選擇科目</option>
+                  {en.teacherId && (teachers.find(t => t.id === en.teacherId) as any)?.instruments?.map((inst: string) => (
+                    <option key={inst} value={inst}>{inst}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-tighter">剩餘堂數</label>
+                <input
+                  type="number"
+                  value={en.remainingLessons}
+                  onChange={(e) => updateEnrollment(i, 'remainingLessons', Number(e.target.value))}
+                  className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-xl px-3 py-2 text-xs font-mono font-bold text-[#4a4238] focus:ring-2 ring-[#c4a484]/20 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-tighter">預儲金額 ($)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#c4a484] font-bold text-[10px]">$</span>
+                  <input
+                    type="number"
+                    value={en.balance}
+                    onChange={(e) => updateEnrollment(i, 'balance', Number(e.target.value))}
+                    className="w-full bg-[#f8f7f2] border border-[#ece4d9] rounded-xl pl-6 pr-3 py-2 text-xs font-mono font-bold text-[#4a4238] focus:ring-2 ring-[#c4a484]/20 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+// ============================================================
 // PricingModal
 // ============================================================
 function PricingModal({
@@ -361,35 +482,74 @@ export default function DatabasePage() {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-           <div className="bg-[#f8f7f2] w-full max-w-lg rounded-[30px] p-10 relative shadow-2xl">
-              <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6">✕</button>
-              <h3 className="text-xl font-bold mb-6">{editingItem ? '編輯資料' : '新增資料'}</h3>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#4a4238]/60 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-[#f8f7f2] w-full max-w-lg rounded-[40px] p-8 md:p-12 relative shadow-2xl max-h-[90vh] overflow-y-auto">
+              <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-[#4a4238]/50 hover:text-[#4a4238] text-xl font-bold transition-colors">✕</button>
+              
+              <div className="mb-8">
+                <h3 className="font-serif text-2xl font-bold tracking-[0.1em] text-[#4a4238] border-b border-[#ece4d9] pb-4">
+                  {editingItem ? '編輯資料' : '新增資料'}
+                </h3>
+                <p className="text-[10px] text-[#c4a484] font-black tracking-[0.2em] mt-2 uppercase">
+                  {activeTab === 'students' ? '學員個人檔案' : activeTab === 'teachers' ? '師資個人檔案' : '教室配置管理'}
+                </p>
+              </div>
+
               <form onSubmit={onSaveProxy} className="flex flex-col gap-6">
-                 <input name="name" defaultValue={editingItem?.name} placeholder="名稱" className="w-full p-4 rounded-xl border border-[#ece4d9]" required />
-                 <input name="phone" defaultValue={editingItem?.phone} placeholder="電話" className="w-full p-4 rounded-xl border border-[#ece4d9]" />
+                 <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-widest">名稱 / 姓名</label>
+                      <input name="name" defaultValue={editingItem?.name} placeholder="請輸入姓名" className="w-full bg-white border border-[#ece4d9] rounded-2xl px-5 py-4 font-bold text-[#4a4238] focus:ring-4 ring-[#c4a484]/10 outline-none transition-all" required />
+                    </div>
+                    
+                    <div>
+                      <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-widest">聯絡電話</label>
+                      <input name="phone" defaultValue={editingItem?.phone} placeholder="請輸入電話號碼" className="w-full bg-white border border-[#ece4d9] rounded-2xl px-5 py-4 font-bold text-[#4a4238] focus:ring-4 ring-[#c4a484]/10 outline-none transition-all" />
+                    </div>
+                 </div>
                  
                  {activeTab === 'teachers' && (
-                   <>
-                     <input name="instruments" defaultValue={editingItem?.instruments?.join(', ')} placeholder="專長科目 (逗號分隔)" className="w-full p-4 rounded-xl border border-[#ece4d9]" />
-                     <input type="number" name="hourlyRate" defaultValue={editingItem?.hourlyRate} placeholder="基礎鐘點費" className="w-full p-4 rounded-xl border border-[#ece4d9]" />
-                   </>
+                   <div className="space-y-4 pt-4 border-t border-[#ece4d9]/50">
+                     <div>
+                        <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-widest">專長科目 (逗號分隔)</label>
+                        <input name="instruments" defaultValue={editingItem?.instruments?.join(', ')} placeholder="例如：鋼琴, 小提琴, 歌唱" className="w-full bg-white border border-[#ece4d9] rounded-2xl px-5 py-4 font-bold text-[#4a4238] focus:ring-4 ring-[#c4a484]/10 outline-none transition-all" />
+                     </div>
+                     <div>
+                        <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-widest">基礎鐘點費 ($)</label>
+                        <input type="number" name="hourlyRate" defaultValue={editingItem?.hourlyRate} placeholder="例如：800" className="w-full bg-white border border-[#ece4d9] rounded-2xl px-5 py-4 font-bold text-[#4a4238] focus:ring-4 ring-[#c4a484]/10 outline-none transition-all" />
+                     </div>
+                   </div>
                  )}
 
                  {activeTab === 'classrooms' && (
-                   <>
-                     <input type="number" name="capacity" defaultValue={editingItem?.capacity} placeholder="容納人數" className="w-full p-4 rounded-xl border border-[#ece4d9]" />
-                     <input name="equipment" defaultValue={editingItem?.equipment?.join(', ')} placeholder="設備 (逗號分隔)" className="w-full p-4 rounded-xl border border-[#ece4d9]" />
-                   </>
+                   <div className="space-y-4 pt-4 border-t border-[#ece4d9]/50">
+                     <div>
+                        <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-widest">容納人數</label>
+                        <input type="number" name="capacity" defaultValue={editingItem?.capacity} placeholder="請輸入容納人數" className="w-full bg-white border border-[#ece4d9] rounded-2xl px-5 py-4 font-bold text-[#4a4238] focus:ring-4 ring-[#c4a484]/10 outline-none transition-all" />
+                     </div>
+                     <div>
+                        <label className="text-[10px] font-black text-[#4a4238]/40 block mb-1 uppercase tracking-widest">設備說明 (逗號分隔)</label>
+                        <input name="equipment" defaultValue={editingItem?.equipment?.join(', ')} placeholder="例如：平台鋼琴, 爵士鼓, 譜架x2" className="w-full bg-white border border-[#ece4d9] rounded-2xl px-5 py-4 font-bold text-[#4a4238] focus:ring-4 ring-[#c4a484]/10 outline-none transition-all" />
+                     </div>
+                   </div>
                  )}
 
                  {activeTab === 'students' && (
-                   <input type="hidden" name="enrollments_json" value={JSON.stringify(tempEnrollments)} />
+                   <div className="pt-4 border-t border-[#ece4d9]/50">
+                     <EnrollmentEditor 
+                        enrollments={tempEnrollments} 
+                        teachers={teachers} 
+                        setEnrollments={setTempEnrollments} 
+                     />
+                     <input type="hidden" name="enrollments_json" value={JSON.stringify(tempEnrollments)} />
+                   </div>
                  )}
 
-                 <button type="submit" disabled={isSubmitting} className="bg-[#4a4238] text-white py-4 rounded-full font-bold">
-                    {isSubmitting ? '儲存中...' : '確認儲存'}
-                 </button>
+                 <div className="pt-8">
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-[#4a4238] hover:bg-[#c4a484] text-white py-5 rounded-full font-black tracking-[0.2em] shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all disabled:opacity-50 disabled:transform-none">
+                       {isSubmitting ? '處理中...' : editingItem ? '確認更新資料' : '建立全新資料'}
+                    </button>
+                 </div>
               </form>
            </div>
         </div>
