@@ -13,8 +13,13 @@ export const exportToExcel = <T extends Record<string, any>>(data: T[], filename
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   
-  // 觸發下載
-  XLSX.writeFile(workbook, `${filename}.xlsx`);
+  try {
+    // 使用套件內建的 writeFile，它會處理檔名與下載邏輯
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
+  } catch (err) {
+    console.error('Export failed:', err);
+    alert('匯出失敗，請檢查瀏覽器設定或嘗試更換瀏覽器');
+  }
 };
 
 /**

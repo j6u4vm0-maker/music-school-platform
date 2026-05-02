@@ -69,6 +69,7 @@ export default function InventoryPage() {
           openTxModal={openTxModal} openProductModal={openProductModal}
           handleExport={handleExport}
           handleImportClick={() => fileInputRef.current?.click()}
+          handleClearAllData={inventory.handleClearAllData}
         />
 
         <input type="file" ref={fileInputRef} onChange={handleImportUI} hidden accept=".xlsx, .xls" />

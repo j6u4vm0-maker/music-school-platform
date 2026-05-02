@@ -61,10 +61,10 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[#f8f7f2] relative overflow-hidden">
-      {/* Background Orbs */}
-      <div className="absolute top-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-[#ece4d9] blur-[120px] opacity-60"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-[#c4a484]/10 blur-[100px] opacity-40"></div>
+    <main className="min-h-screen flex items-center justify-center relative overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('https://www.workband.com.tw/store_image/7thmov/A174459629727.webp')" }}>
+      {/* Darker overlay to improve readability if needed, but the image is light, so maybe a subtle light overlay */}
+      <div className="absolute inset-0 bg-white/20"></div>
+
       
       <div className="w-full max-w-md px-6 z-10 animate-in fade-in zoom-in duration-700">
         <div className="bg-white/70 backdrop-blur-xl border-2 border-white rounded-[40px] shadow-[0_20px_50px_rgba(74,66,56,0.1)] p-10 md:p-14 text-center">

@@ -111,6 +111,20 @@ export default function ProductModal({
                <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">最低安全庫存 (Min Stock)</label>
                <input type="number" min="0" required value={editingProduct.minStock} onChange={e => setEditingProduct({...editingProduct, minStock: Number(e.target.value)})} className="w-full bg-white border-2 border-[#ece4d9] p-3 rounded-2xl focus:outline-none focus:border-[#c4a484] font-mono text-sm font-bold" />
             </div>
+            <div className="flex flex-col gap-2">
+               <label className="text-xs font-black text-[#4a4238] tracking-widest ml-1">會計科目 (Account)</label>
+               <input 
+                 list="subject-options"
+                 required
+                 value={editingProduct.accountingSubject || ''} 
+                 onChange={e => setEditingProduct({...editingProduct, accountingSubject: e.target.value})} 
+                 className="w-full bg-white border-2 border-[#ece4d9] p-3 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm"
+                 placeholder="如：樂器買賣..."
+               />
+               <datalist id="subject-options">
+                 {['樂器買賣', '樂譜買賣', '其他買賣', '教材買賣', '配件買賣'].map(s => <option key={s} value={s} />)}
+               </datalist>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2">

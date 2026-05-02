@@ -14,9 +14,9 @@ import {
 } from 'firebase/firestore';
 import { Product } from '../types/inventory';
 
-const productsCol = collection(db, 'products');
-const invCol = collection(db, 'inventory_transactions');
-const ledgersCol = collection(db, 'financial_ledgers');
+export const productsCol = collection(db, 'products');
+export const invCol = collection(db, 'inventory_transactions');
+export const ledgersCol = collection(db, 'financial_ledgers');
 
 const mapProduct = (d: QueryDocumentSnapshot<DocumentData>): Product => ({
   productId: d.id,

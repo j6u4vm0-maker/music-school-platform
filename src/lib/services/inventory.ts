@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { Product } from '../types/inventory';
 import * as inventoryRepo from '../repositories/inventoryRepository';
+import { productsCol, invCol, ledgersCol } from '../repositories/inventoryRepository';
 
 /**
  * 新增商品
@@ -31,11 +32,11 @@ export const addProduct = async (product: Omit<Product, 'productId' | 'profit'>)
  */
 export const updateProduct = async (productId: string, updates: Partial<Omit<Product, 'productId'>>) => {
   const payload = { ...updates };
-  
+
   if (payload.sellPrice !== undefined && payload.costPrice !== undefined) {
     payload.profit = payload.sellPrice - payload.costPrice;
   }
-  
+
   await inventoryRepo.updateProductRecord(productId, payload);
 };
 
@@ -141,7 +142,7 @@ export const handleInventoryTransaction = async (
     // 4. 新增財務帳本紀錄 (FinancialLedger - 庫存專用分帳)
     const newLedgerDocRef = doc(ledgerCol);
     let ledgerType: 'EXPENSE' | 'REVENUE' = (scenario === 'SALES' || scenario === 'SALES_RETURN') ? 'REVENUE' : 'EXPENSE';
-    
+
     // Amount logic:
     // STOCK_IN: Expense (+)
     // PURCHASE_RETURN: Expense (-)
@@ -163,7 +164,7 @@ export const handleInventoryTransaction = async (
     // 5. 同步至主財務大帳本 (transactions collection)
     const mainTxDocRef = doc(mainTxCol);
     const dateStr = new Date(now).toISOString().split('T')[0];
-    
+
     let mainTxType: any = 'EXPENSE';
     if (scenario === 'SALES') mainTxType = 'SALES';
     if (scenario === 'SALES_RETURN') mainTxType = 'SALES_RETURN';
@@ -191,7 +192,7 @@ export const handleInventoryTransaction = async (
       description: `[庫存系統] ${actionLabel}: ${productData.itemName} x ${params.qty}`,
       date: dateStr,
       createdAt: now,
-      paymentMethod: 'CASH', 
+      paymentMethod: 'CASH',
       refId: newInventoryDocRef.id
     });
   });
@@ -205,7 +206,7 @@ export const handleInventoryTransaction = async (
  */
 export const revertInventoryTransaction = async (inventoryTxId: string) => {
   const invDocRef = doc(db, 'inventory_transactions', inventoryTxId);
-  
+
   await runTransaction(db, async (transaction) => {
     const invSnap = await transaction.get(invDocRef);
     if (!invSnap.exists()) return;
@@ -248,22 +249,31 @@ export const updateInventoryTransactionAmount = async (inventoryTxId: string, ne
  * 注意：此操作不可逆，僅用於清除測試資料
  */
 export const clearAllInventoryData = async () => {
-  const products = await getProducts();
-  const invTxs = await getInventoryTransactions();
-  const ledgers = await inventoryRepo.fetchFinancialLedgers();
+  console.log('Starting full inventory data purge...');
+  
+  // 1. 取得所有資料 (使用已匯出的 collection 引用)
+  const [productsSnap, invTxSnap, ledgerSnap] = await Promise.all([
+    getDocs(productsCol),
+    getDocs(invCol),
+    getDocs(ledgersCol)
+  ]);
+
+  console.log(`Found: ${productsSnap.size} products, ${invTxSnap.size} transactions, ${ledgerSnap.size} ledgers`);
 
   // 1. 刪除所有商品
-  const pPromises = products.map(p => deleteProduct(p.productId!));
-  
+  const pPromises = productsSnap.docs.map(d => deleteDoc(d.ref));
+
   // 2. 刪除所有進銷存紀錄
-  const invPromises = invTxs.map(tx => deleteDoc(doc(db, 'inventory_transactions', tx.id)));
-  
+  const invPromises = invTxSnap.docs.map(d => deleteDoc(d.ref));
+
   // 3. 刪除所有庫存分帳
-  const ledgerPromises = ledgers.map(l => deleteDoc(doc(db, 'financial_ledgers', l.id)));
-  
+  const ledgerPromises = ledgerSnap.docs.map(d => deleteDoc(d.ref));
+
   // 4. 刪除主帳本中屬於零售系統的紀錄
-  const mainTxSnap = await getDocs(query(collection(db, 'transactions'), where('userName', '==', '零售/進貨系統')));
-  const mainTxPromises = mainTxSnap.docs.map(d => deleteDoc(doc(db, 'transactions', d.id)));
+  const mainTxCol = collection(db, 'transactions');
+  const mainTxSnap = await getDocs(query(mainTxCol, where('userName', '==', '零售/進貨系統')));
+  console.log(`Found ${mainTxSnap.size} related entries in main ledger`);
+  const mainTxPromises = mainTxSnap.docs.map(d => deleteDoc(d.ref));
 
   await Promise.all([
     ...pPromises,
@@ -271,4 +281,6 @@ export const clearAllInventoryData = async () => {
     ...ledgerPromises,
     ...mainTxPromises
   ]);
+  
+  console.log('Inventory data purge complete.');
 };

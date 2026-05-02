@@ -22,6 +22,7 @@ interface ProductTableProps {
   openProductModal: (p?: Product) => void;
   handleExport: () => void;
   handleImportClick: () => void;
+  handleClearAllData?: () => void;
 }
 
 export default function ProductTable({
@@ -44,7 +45,8 @@ export default function ProductTable({
   openTxModal,
   openProductModal,
   handleExport,
-  handleImportClick
+  handleImportClick,
+  handleClearAllData
 }: ProductTableProps) {
 
   // 新增欄位顯示控制狀態
@@ -59,6 +61,7 @@ export default function ProductTable({
     profit: true,
     stockQty: true,
     minStock: true,
+    accountingSubject: true,
     note: true,
   });
   const [showColumnToggle, setShowColumnToggle] = useState(false);
@@ -78,6 +81,7 @@ export default function ProductTable({
     { id: 'profit', name: '利潤' },
     { id: 'stockQty', name: '庫存數量' },
     { id: 'minStock', name: '安全庫存' },
+    { id: 'accountingSubject', name: '會計科目' },
     { id: 'note', name: '備註' },
   ];
 
@@ -122,7 +126,23 @@ export default function ProductTable({
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowColumnToggle(false)}></div>
                   <div className="absolute right-0 mt-2 w-56 bg-white border-2 border-[#ece4d9] rounded-2xl shadow-2xl z-50 p-4 animate-in fade-in zoom-in duration-200">
-                    <h4 className="text-[10px] font-black tracking-widest text-[#4a4238]/40 uppercase mb-3 px-2">自定義顯示欄位</h4>
+                    <div className="flex justify-between items-center mb-3 px-2">
+                      <h4 className="text-[10px] font-black tracking-widest text-[#4a4238]/40 uppercase">自定義顯示欄位</h4>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setVisibleColumns(Object.keys(visibleColumns).reduce((acc, key) => ({ ...acc, [key]: true }), {} as any))}
+                          className="text-[9px] font-bold text-[#c4a484] hover:underline"
+                        >
+                          全選
+                        </button>
+                        <button 
+                          onClick={() => setVisibleColumns(Object.keys(visibleColumns).reduce((acc, key) => ({ ...acc, [key]: false }), {} as any))}
+                          className="text-[9px] font-bold text-gray-400 hover:underline"
+                        >
+                          清空
+                        </button>
+                      </div>
+                    </div>
                     <div className="flex flex-col gap-1">
                       {COLUMNS.map(col => (
                         <label key={col.id} className="flex items-center gap-3 px-3 py-2 hover:bg-[#f8f7f2] rounded-xl cursor-pointer transition-colors group">
@@ -151,6 +171,15 @@ export default function ProductTable({
                 <button onClick={() => openProductModal()} className="text-white bg-[#4a4238] p-2.5 px-4 rounded-xl shadow-sm border border-[#4a4238] hover:bg-[#322c26] font-bold text-xs flex items-center gap-2 transition-all ml-2 hover:-translate-y-0.5">
                    ➕ 新增商品
                 </button>
+                {handleClearAllData && (
+                   <button 
+                     onClick={handleClearAllData}
+                     className="text-red-500 bg-white p-2.5 rounded-xl shadow-sm border border-red-100 hover:bg-red-50 font-bold text-xs flex items-center gap-2 transition-all ml-2"
+                     title="危險操作：清除所有資料"
+                   >
+                     🗑️ 清空
+                   </button>
+                )}
               </>
             )}
           </div>
@@ -265,7 +294,16 @@ export default function ProductTable({
                 )}
                 {visibleColumns.costPrice && <th className="py-4 px-6 text-right w-24">進價</th>}
                 {visibleColumns.sellPrice && <th className="py-4 px-6 text-right w-24">售價</th>}
-                  {visibleColumns.note && (
+                {visibleColumns.profit && <th className="py-4 px-6 text-right w-24">利潤</th>}
+                {visibleColumns.stockQty && <th className="py-4 px-6 text-center w-24">庫存</th>}
+                {visibleColumns.minStock && <th className="py-4 px-6 text-center w-24">安全庫存</th>}
+                {visibleColumns.accountingSubject && (
+                  <th className="py-4 px-6 w-32">
+                    會計科目
+                    <input type="text" placeholder="篩選..." value={columnFilters.accountingSubject} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, accountingSubject: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
+                  </th>
+                )}
+                {visibleColumns.note && (
                   <th className="py-4 px-6 w-48">
                     備註
                     <input type="text" placeholder="篩選..." value={columnFilters.note} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, note: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
@@ -320,6 +358,7 @@ export default function ProductTable({
                          </span>
                       </td>
                     )}
+                    {visibleColumns.accountingSubject && <td className="py-4 px-6 text-xs font-bold text-blue-600/70">{p.accountingSubject || '-'}</td>}
                     {visibleColumns.note && <td className="py-4 px-6 text-xs opacity-50 truncate max-w-[150px]" title={p.note}>{p.note || '-'}</td>}
                     <td className="py-4 px-6 relative z-10 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-10px_0_15px_rgba(0,0,0,0.02)]">
                       <div className="flex flex-wrap gap-2 justify-center">

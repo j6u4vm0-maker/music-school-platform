@@ -11,6 +11,7 @@ export interface Product {
   stockQty: number;
   minStock: number;
   note: string;
+  accountingSubject: string;
 }
 
 export interface InventoryTransaction {

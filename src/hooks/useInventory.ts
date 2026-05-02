@@ -66,10 +66,7 @@ export const useInventory = (profileName: string) => {
     if (!selectedProduct || !modalType) return;
     setIsSubmitting(true);
     try {
-      let accountingCategory = '其他收入';
-      const cat = selectedProduct.category || '';
-      if (cat === '樂器' || cat === '配件/周邊') accountingCategory = '樂器買賣';
-      else if (cat === '樂譜' || cat === '教材/圖書') accountingCategory = '樂譜買賣';
+      const accountingCategory = selectedProduct.accountingSubject || '樂器買賣';
 
       await handleInventoryTransaction(modalType, {
         productId: selectedProduct.productId!,
@@ -93,6 +90,7 @@ export const useInventory = (profileName: string) => {
       setEditingProduct({
         category: '樂器', brand: '', itemName: '', origin: '', material: '',
         costPrice: 0, sellPrice: 0, stockQty: 0, minStock: 5, note: '',
+        accountingSubject: '其他買賣',
       });
     }
     setIsProductModalOpen(true);
@@ -122,7 +120,9 @@ export const useInventory = (profileName: string) => {
   };
 
   const handleClearAllData = async () => {
-    if (confirm('⚠️ 警告：這將會清除所有商品資料、進銷存紀錄以及相關財務報表，且無法復原！確定要繼續嗎？')) {
+    console.log('Attempting to clear all data...');
+    if (window.confirm('⚠️ 警告：這將會清除所有商品資料、進銷存紀錄以及相關財務報表，且無法復原！確定要繼續嗎？')) {
+      console.log('User confirmed clear action.');
       setIsLoading(true);
       try {
         await clearAllInventoryData();
@@ -167,29 +167,114 @@ export const useInventory = (profileName: string) => {
   };
 
   const handleExport = () => {
-    const data = products.map(p => ({
-      '分類': p.category || '樂器', '樂器品牌 / 出版社': p.brand, '品項': p.itemName,
-      '產地': p.origin || '', '材質 / 特色': p.material || '', '進價': p.costPrice,
-      '售價': p.sellPrice, '利潤': (p.sellPrice - p.costPrice), '庫存數量': p.stockQty, '最低安全庫存': p.minStock, '備註': p.note || ''
+    if (filteredProducts.length === 0) {
+      alert('目前沒有符合條件的資料可以匯出');
+      return;
+    }
+
+    const data = filteredProducts.map(p => ({
+      '分類': p.category || '未分類', 
+      '樂器品牌 / 出版社': p.brand || '未分類', 
+      '品項': p.itemName || '未命名',
+      '產地': p.origin || '', 
+      '材質 / 特色': p.material || '', 
+      '會計科目': p.accountingSubject || '其他買賣',
+      '進價': Number(p.costPrice) || 0, 
+      '售價': Number(p.sellPrice) || 0, 
+      '利潤': (Number(p.sellPrice || 0) - Number(p.costPrice || 0)), 
+      '庫存數量': Number(p.stockQty) || 0, 
+      '最低安全庫存': Number(p.minStock) || 0, 
+      '備註': p.note || ''
     }));
-    exportToExcel(data, `庫存清單_${new Date().toISOString().split('T')[0]}`);
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    exportToExcel(data, `庫存清單_${dateStr}`);
   };
 
   const handleImport = async (file: File) => {
     if (!confirm('警告：這將會批次新增商品。是否繼續？')) return;
     setIsLoading(true);
+    let successCount = 0;
+    let errorCount = 0;
+
     try {
       const data = await importFromExcel(file);
+      console.log(`開始匯入 ${data.length} 筆資料...`, data[0]); // Log first row for debugging
+
       for (const row of data) {
-        await addProduct({
-          category: row['分類'] || '樂器', brand: row['樂器品牌 / 出版社'] || '未分類',
-          itemName: row['品項'] || '未命名商品', origin: row['產地'] || '', material: row['材質 / 特色'] || '',
-          costPrice: Number(row['進價']) || 0, sellPrice: Number(row['售價']) || 0,
-          stockQty: Number(row['庫存數量']) || 0, minStock: Number(row['最低安全庫存']) || 5, note: row['備註'] || '',
-        });
+        try {
+          // Helper to find value by flexible key
+          const getVal = (keywords: string[]) => {
+            const key = Object.keys(row).find(k => 
+              keywords.some(kw => k.replace(/\s/g, '').includes(kw.replace(/\s/g, '')))
+            );
+            return key ? row[key] : undefined;
+          };
+
+          const brand = getVal(['樂器品牌/出版社', '商品名稱/出版社', '品牌', '出版社']) || '';
+          const itemName = getVal(['型號', '品項', '品項名稱', '商品名稱']) || '';
+          
+          if (!brand && !itemName) {
+             console.warn('跳過空白列:', row);
+             continue; 
+          }
+
+          const category = getVal(['分類']) || '樂器';
+          const accountingSubject = getVal(['會計科目']);
+          
+          // Default subject logic based on brand
+          let finalSubject = accountingSubject;
+          if (!finalSubject) {
+            const brandStr = String(brand || '');
+            if (brandStr.includes('歐德琴')) {
+              finalSubject = '樂器買賣';
+            } else if (brandStr.includes('伯斯特') || brandStr.includes('音樂家小舖')) {
+              finalSubject = '樂譜買賣';
+            } else {
+              finalSubject = '其他買賣';
+            }
+          }
+
+          const costPrice = Number(getVal(['進價', '成本'])) || 0;
+          const sellPrice = Number(getVal(['售價', '價格'])) || 0;
+          const stockQty = Number(getVal(['庫存數量', '現有庫存', '數量'])) || 0;
+          const minStock = Number(getVal(['最低安全', '安全庫存'])) || 5;
+
+          const productId = await addProduct({
+            category: String(category),
+            brand: String(brand || '未分類'),
+            itemName: String(itemName || '未命名商品'),
+            origin: String(getVal(['產地']) || ''),
+            material: String(getVal(['材質/特色', '材質']) || ''),
+            accountingSubject: String(finalSubject || '其他買賣'),
+            costPrice,
+            sellPrice,
+            stockQty: 0, 
+            minStock,
+            note: String(getVal(['備註']) || ''),
+          });
+
+          if (stockQty > 0) {
+            await handleInventoryTransaction('STOCK_IN', {
+              productId,
+              qty: stockQty,
+              price: costPrice,
+              accountingCategory: String(finalSubject || '其他買賣'),
+              operator: '系統匯入',
+            });
+          }
+          
+          successCount++;
+        } catch (rowErr) {
+          console.error('單筆資料匯入失敗:', row, rowErr);
+          errorCount++;
+        }
       }
-      alert('匯入成功');
-    } catch (err) { alert('匯入失敗'); }
+      alert(`匯入完成！\n成功: ${successCount} 筆\n失敗: ${errorCount} 筆`);
+    } catch (err: any) {
+      console.error('整體匯入流程出錯:', err);
+      alert('匯入失敗: ' + (err.message || '未知錯誤'));
+    }
     setIsLoading(false);
   };
 
