@@ -33,6 +33,10 @@ export default function InventoryPage() {
     isBatchModalOpen, setIsBatchModalOpen,
     batchCategory, setBatchCategory,
     batchBrand, setBatchBrand,
+    batchMinStock, setBatchMinStock,
+    batchStockQty, setBatchStockQty,
+    batchCostPrice, setBatchCostPrice,
+    batchSellPrice, setBatchSellPrice,
     openTxModal, submitTransaction, openProductModal,
     handleProductSubmit, handleDeleteProduct, handleBatchUpdate,
     toggleSelect, toggleSelectAll, handleExport,
@@ -117,10 +121,36 @@ export default function InventoryPage() {
               <h2 className="text-2xl font-black text-[#4a4238]">批次快速修改</h2>
               <p className="text-xs font-bold text-[#4a4238]/50 tracking-widest mt-2">正在針對已選取的 {selectedIds.size} 項商品進行調整</p>
             </div>
-            <form onSubmit={handleBatchUpdate} className="flex flex-col gap-6">
-              <input value={batchCategory} onChange={e => setBatchCategory(e.target.value)} className="w-full bg-white border-2 border-[#ece4d9] p-4 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm" placeholder="套用新分類..." />
-              <input value={batchBrand} onChange={e => setBatchBrand(e.target.value)} className="w-full bg-white border-2 border-[#ece4d9] p-4 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-sm" placeholder="套用新品牌..." />
-              <button type="submit" disabled={isSubmitting} className="w-full py-4 bg-[#4a4238] hover:bg-[#322c26] text-white rounded-full font-black tracking-[0.2em] text-sm transition-all shadow-xl hover:-translate-y-1">確認全數套用</button>
+            <form onSubmit={handleBatchUpdate} className="flex flex-col gap-5 overflow-y-auto max-h-[60vh] px-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black text-[#4a4238]/40 mb-1 block ml-4">基本資訊 (選填)</label>
+                  <div className="flex flex-col gap-3">
+                    <input value={batchCategory} onChange={e => setBatchCategory(e.target.value)} className="w-full bg-white border-2 border-[#ece4d9] p-3.5 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-xs" placeholder="套用新分類..." />
+                    <input value={batchBrand} onChange={e => setBatchBrand(e.target.value)} className="w-full bg-white border-2 border-[#ece4d9] p-3.5 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-xs" placeholder="套用新品牌..." />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-[#4a4238]/40 mb-1 block ml-4">庫存設定 (選填)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="number" value={batchMinStock} onChange={e => setBatchMinStock(e.target.value)} className="bg-white border-2 border-[#ece4d9] p-3.5 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-xs" placeholder="安全庫存..." />
+                    <input type="number" value={batchStockQty} onChange={e => setBatchStockQty(e.target.value)} className="bg-white border-2 border-[#ece4d9] p-3.5 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-xs" placeholder="現有庫存..." />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black text-[#4a4238]/40 mb-1 block ml-4">金額設定 (選填)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="number" value={batchCostPrice} onChange={e => setBatchCostPrice(e.target.value)} className="bg-white border-2 border-[#ece4d9] p-3.5 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-xs" placeholder="進價..." />
+                    <input type="number" value={batchSellPrice} onChange={e => setBatchSellPrice(e.target.value)} className="bg-white border-2 border-[#ece4d9] p-3.5 rounded-2xl focus:outline-none focus:border-[#c4a484] font-bold text-xs" placeholder="售價..." />
+                  </div>
+                </div>
+              </div>
+              
+              <button type="submit" disabled={isSubmitting} className="w-full py-4 mt-2 bg-[#4a4238] hover:bg-[#322c26] text-white rounded-full font-black tracking-[0.2em] text-sm transition-all shadow-xl hover:-translate-y-1">
+                {isSubmitting ? '正在套用中...' : '確認全數套用'}
+              </button>
             </form>
           </div>
         </div>
@@ -130,7 +160,15 @@ export default function InventoryPage() {
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom duration-300">
           <div className="bg-[#4a4238] text-white px-8 py-4 rounded-full shadow-2xl border-2 border-white/20 flex items-center gap-6 backdrop-blur-md">
             <p className="text-sm font-black tracking-widest">已選擇 {selectedIds.size} 項商品</p>
-            <button onClick={() => { setBatchCategory(''); setBatchBrand(''); setIsBatchModalOpen(true); }} className="bg-[#c4a480] hover:bg-[#b08d6d] text-white px-5 py-2 rounded-full text-xs font-black tracking-widest transition-all shadow-lg">⚡ 批次修改</button>
+            <button onClick={() => { 
+              setBatchCategory(''); 
+              setBatchBrand(''); 
+              setBatchMinStock('');
+              setBatchStockQty('');
+              setBatchCostPrice('');
+              setBatchSellPrice('');
+              setIsBatchModalOpen(true); 
+            }} className="bg-[#c4a480] hover:bg-[#b08d6d] text-white px-5 py-2 rounded-full text-xs font-black tracking-widest transition-all shadow-lg">⚡ 批次修改</button>
             <button onClick={() => setSelectedIds(new Set())} className="bg-white/10 hover:bg-white/20 text-white px-5 py-2 rounded-full text-xs font-black tracking-widest transition-all">取消</button>
           </div>
         </div>

@@ -37,6 +37,10 @@ export const useInventory = (profileName: string) => {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [batchCategory, setBatchCategory] = useState('');
   const [batchBrand, setBatchBrand] = useState('');
+  const [batchMinStock, setBatchMinStock] = useState<string>('');
+  const [batchStockQty, setBatchStockQty] = useState<string>('');
+  const [batchCostPrice, setBatchCostPrice] = useState<string>('');
+  const [batchSellPrice, setBatchSellPrice] = useState<string>('');
 
 
   useEffect(() => {
@@ -142,9 +146,21 @@ export const useInventory = (profileName: string) => {
       const updates: any = {};
       if (batchCategory) updates.category = batchCategory;
       if (batchBrand) updates.brand = batchBrand;
+      if (batchMinStock !== '') updates.minStock = Number(batchMinStock);
+      if (batchStockQty !== '') updates.stockQty = Number(batchStockQty);
+      if (batchCostPrice !== '') updates.costPrice = Number(batchCostPrice);
+      if (batchSellPrice !== '') updates.sellPrice = Number(batchSellPrice);
+
       const promises = Array.from(selectedIds).map(id => updateProduct(id, updates));
       await Promise.all(promises);
       setIsBatchModalOpen(false);
+      // Reset batch fields
+      setBatchCategory('');
+      setBatchBrand('');
+      setBatchMinStock('');
+      setBatchStockQty('');
+      setBatchCostPrice('');
+      setBatchSellPrice('');
       setSelectedIds(new Set());
       alert(`成功批次更新 ${selectedIds.size} 項商品！`);
     } catch (err) { alert('批次更新失敗'); }
@@ -316,6 +332,10 @@ export const useInventory = (profileName: string) => {
     isBatchModalOpen, setIsBatchModalOpen,
     batchCategory, setBatchCategory,
     batchBrand, setBatchBrand,
+    batchMinStock, setBatchMinStock,
+    batchStockQty, setBatchStockQty,
+    batchCostPrice, setBatchCostPrice,
+    batchSellPrice, setBatchSellPrice,
     openTxModal, submitTransaction, openProductModal,
     handleProductSubmit, handleDeleteProduct, handleBatchUpdate, handleClearAllData,
     toggleSelect, toggleSelectAll, handleExport, handleImport,
