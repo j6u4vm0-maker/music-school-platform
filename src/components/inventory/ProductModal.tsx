@@ -7,6 +7,7 @@ interface ProductModalProps {
   editingProduct: Product | Partial<Product> | null;
   setEditingProduct: (p: Product | Partial<Product> | null) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onDelete?: (id: string) => void;
   isSubmitting: boolean;
   categoriesList: string[];
   brands: string[];
@@ -18,10 +19,12 @@ export default function ProductModal({
   editingProduct,
   setEditingProduct,
   onSubmit,
+  onDelete,
   isSubmitting,
   categoriesList,
   brands
 }: ProductModalProps) {
+
   if (!isOpen || !editingProduct) return null;
 
   return (
@@ -118,7 +121,23 @@ export default function ProductModal({
           <button type="submit" disabled={isSubmitting} className={`w-full mt-4 py-4 rounded-full font-black tracking-[0.2em] text-sm transition-all shadow-md bg-[#4a4238] hover:bg-[#322c26] text-white hover:shadow-xl hover:-translate-y-1 disabled:opacity-50`}>
             {isSubmitting ? '儲存中...' : '確認儲存'}
           </button>
+
+          { (editingProduct as Product).productId && onDelete && (
+            <button 
+              type="button"
+              onClick={() => {
+                if (window.confirm('確定要永久刪除此商品嗎？此操作無法復原。')) {
+                  onDelete((editingProduct as Product).productId!);
+                  onClose();
+                }
+              }}
+              className="w-full mt-2 py-2 rounded-xl font-bold text-xs text-red-500 hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+            >
+              ✕ 永久刪除此商品
+            </button>
+          )}
         </form>
+
       </div>
     </div>
   );

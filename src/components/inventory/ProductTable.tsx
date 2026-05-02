@@ -18,9 +18,8 @@ interface ProductTableProps {
   materialsList: string[];
   isLoading: boolean;
   canEdit: boolean;
-  openTxModal: (p: Product, type: 'STOCK_IN' | 'SALES') => void;
+  openTxModal: (p: Product, type: 'STOCK_IN' | 'SALES' | 'SALES_RETURN' | 'PURCHASE_RETURN') => void;
   openProductModal: (p?: Product) => void;
-  handleDeleteProduct: (id: string) => void;
   handleExport: () => void;
   handleImportClick: () => void;
 }
@@ -44,10 +43,10 @@ export default function ProductTable({
   canEdit,
   openTxModal,
   openProductModal,
-  handleDeleteProduct,
   handleExport,
   handleImportClick
 }: ProductTableProps) {
+
   // 新增欄位顯示控制狀態
   const [visibleColumns, setVisibleColumns] = useState({
     category: true,
@@ -266,16 +265,13 @@ export default function ProductTable({
                 )}
                 {visibleColumns.costPrice && <th className="py-4 px-6 text-right w-24">進價</th>}
                 {visibleColumns.sellPrice && <th className="py-4 px-6 text-right w-24">售價</th>}
-                {visibleColumns.profit && <th className="py-4 px-6 text-right w-24">利潤</th>}
-                {visibleColumns.stockQty && <th className="py-4 px-6 text-center w-28">庫存數量</th>}
-                {visibleColumns.minStock && <th className="py-4 px-6 text-center w-28">安全庫存</th>}
-                {visibleColumns.note && (
+                  {visibleColumns.note && (
                   <th className="py-4 px-6 w-48">
                     備註
                     <input type="text" placeholder="篩選..." value={columnFilters.note} onClick={e => e.stopPropagation()} onChange={e => setColumnFilters({...columnFilters, note: e.target.value})} className="block w-full mt-2 font-normal bg-white border border-[#ece4d9] rounded px-2 py-1 focus:outline-none focus:border-[#c4a484] lowercase" />
                   </th>
                 )}
-                <th className="py-4 px-6 text-center w-52 sticky right-0 bg-[#f8f7f2]/95 backdrop-blur-sm z-20">操作</th>
+                <th className="py-4 px-6 text-center w-64 sticky right-0 bg-[#f8f7f2]/95 backdrop-blur-sm z-20">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#ece4d9]/50">
@@ -326,32 +322,52 @@ export default function ProductTable({
                     )}
                     {visibleColumns.note && <td className="py-4 px-6 text-xs opacity-50 truncate max-w-[150px]" title={p.note}>{p.note || '-'}</td>}
                     <td className="py-4 px-6 relative z-10 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-10px_0_15px_rgba(0,0,0,0.02)]">
-                      <div className="flex flex-wrap gap-1.5 justify-center">
+                      <div className="flex flex-wrap gap-2 justify-center">
                         <button 
                           onClick={() => openTxModal(p, 'SALES')}
-                          className="bg-[#c4a480]/10 hover:bg-[#c4a480]/20 text-[#c4a480] border border-[#c4a480]/30 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
+                          className="w-20 h-9 bg-[#c4a480]/10 hover:bg-[#c4a480]/20 text-[#c4a480] border border-[#c4a480]/30 rounded text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-1 active:scale-95"
                         >
                           💰 售出
                         </button>
+                        
+                        {/* 整合式退回按鈕 */}
+                        <div className="relative group/ret-menu">
+                          <button 
+                            className="w-20 h-9 bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-200 rounded text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-1 active:scale-95"
+                          >
+                            ↩ 退回 <span className="text-[8px] opacity-30">▼</span>
+                          </button>
+                          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover/ret-menu:block z-[100] min-w-[130px] bg-white rounded-xl shadow-2xl border-2 border-purple-100 p-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                             <button 
+                               onClick={() => openTxModal(p, 'SALES_RETURN')}
+                               className="w-full text-left px-3 py-2.5 rounded-lg text-[10px] font-bold text-purple-600 hover:bg-purple-50 transition-colors whitespace-nowrap flex items-center gap-2"
+                             >
+                               <span className="text-xs">🙋</span> 銷貨退回 (客戶)
+                             </button>
+                             <button 
+                               onClick={() => openTxModal(p, 'PURCHASE_RETURN')}
+                               className="w-full text-left px-3 py-2.5 rounded-lg text-[10px] font-bold text-blue-600 hover:bg-blue-50 transition-colors border-t border-purple-50 whitespace-nowrap flex items-center gap-2"
+                             >
+                               <span className="text-xs">📦</span> 退給供應商
+                             </button>
+                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-white"></div>
+                          </div>
+                        </div>
+
                         {canEdit && (
                           <>
                             <button 
                               onClick={() => openTxModal(p, 'STOCK_IN')}
-                              className="bg-[#4a4238]/5 hover:bg-[#4a4238]/10 text-[#4a4238] border border-[#4a4238]/20 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
+                              className="w-20 h-9 bg-[#4a4238]/5 hover:bg-[#4a4238]/10 text-[#4a4238] border border-[#4a4238]/20 rounded text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-1 active:scale-95"
                             >
                               📥 進貨
                             </button>
+
                             <button 
                               onClick={() => openProductModal(p)}
-                              className="bg-blue-50 hover:bg-blue-100 text-blue-500 border border-blue-200 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
+                              className="w-20 h-9 bg-blue-50 hover:bg-blue-100 text-blue-500 border border-blue-200 rounded text-[10px] font-black tracking-widest transition-all flex items-center justify-center gap-1 active:scale-95"
                             >
                               ✎ 編輯
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteProduct(p.productId!)}
-                              className="bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 px-2 py-1 rounded text-[10px] font-black tracking-widest transition-colors scale-95"
-                            >
-                              ✕
                             </button>
                           </>
                         )}
@@ -359,9 +375,11 @@ export default function ProductTable({
                     </td>
                   </tr>
                 ))
+
               )}
             </tbody>
           </table>
+
         )}
       </div>
     </div>

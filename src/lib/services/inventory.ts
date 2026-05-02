@@ -84,11 +84,11 @@ export const subscribeToFinancialLedgers = (limitCount: number = 50, callback: (
  * 使用 runTransaction 確保讀取與寫入庫存時不會發生資料衝突 (Race Condition)
  */
 export const handleInventoryTransaction = async (
-  scenario: 'STOCK_IN' | 'SALES',
+  scenario: 'STOCK_IN' | 'SALES' | 'SALES_RETURN' | 'PURCHASE_RETURN',
   params: {
     productId: string;
     qty: number;
-    price: number; // 若為 STOCK_IN 則傳入 costPrice，若為 SALES 則傳入 sellPrice
+    price: number; // STOCK_IN/PURCHASE_RETURN uses costPrice, SALES/SALES_RETURN uses sellPrice
     accountingCategory: string;
     operator: string;
   }
@@ -109,12 +109,12 @@ export const handleInventoryTransaction = async (
     const currentStock = productData.stockQty || 0;
     let newStock = currentStock;
 
-    if (scenario === 'STOCK_IN') {
+    if (scenario === 'STOCK_IN' || scenario === 'SALES_RETURN') {
       newStock += params.qty;
-    } else if (scenario === 'SALES') {
+    } else if (scenario === 'SALES' || scenario === 'PURCHASE_RETURN') {
       newStock -= params.qty;
       if (newStock < 0) {
-        throw new Error(`【交易失敗】該商品庫存不足！目前僅剩: ${currentStock}，欲結帳數量: ${params.qty}`);
+        throw new Error(`【交易失敗】該商品庫存不足！目前僅剩: ${currentStock}，欲操作數量: ${params.qty}`);
       }
     }
 
@@ -125,21 +125,38 @@ export const handleInventoryTransaction = async (
 
     // 3. 新增進銷存紀錄 (InventoryTransaction)
     const newInventoryDocRef = doc(inventoryCol);
+    let invTxType: 'IN_STOCK' | 'OUT_STOCK' | 'RETURN_IN' | 'RETURN_OUT' = 'IN_STOCK';
+    if (scenario === 'SALES') invTxType = 'OUT_STOCK';
+    if (scenario === 'SALES_RETURN') invTxType = 'RETURN_IN';
+    if (scenario === 'PURCHASE_RETURN') invTxType = 'RETURN_OUT';
+
     transaction.set(newInventoryDocRef, {
       productId: params.productId,
-      type: scenario === 'STOCK_IN' ? 'IN_STOCK' : 'OUT_STOCK',
-      qtyChange: scenario === 'STOCK_IN' ? params.qty : -params.qty,
+      type: invTxType,
+      qtyChange: (scenario === 'STOCK_IN' || scenario === 'SALES_RETURN') ? params.qty : -params.qty,
       operator: params.operator,
       timestamp: now,
     });
 
     // 4. 新增財務帳本紀錄 (FinancialLedger - 庫存專用分帳)
     const newLedgerDocRef = doc(ledgerCol);
+    let ledgerType: 'EXPENSE' | 'REVENUE' = (scenario === 'SALES' || scenario === 'SALES_RETURN') ? 'REVENUE' : 'EXPENSE';
+    
+    // Amount logic:
+    // STOCK_IN: Expense (+)
+    // PURCHASE_RETURN: Expense (-)
+    // SALES: Revenue (+)
+    // SALES_RETURN: Revenue (-)
+    let ledgerAmount = params.price * params.qty;
+    if (scenario === 'PURCHASE_RETURN' || scenario === 'SALES_RETURN') {
+      ledgerAmount = -ledgerAmount;
+    }
+
     transaction.set(newLedgerDocRef, {
       transactionId: newInventoryDocRef.id,
-      type: scenario === 'STOCK_IN' ? 'EXPENSE' : 'REVENUE',
+      type: ledgerType,
       category: params.accountingCategory,
-      amount: params.price * params.qty,
+      amount: ledgerAmount,
       timestamp: now,
     });
 
@@ -147,13 +164,31 @@ export const handleInventoryTransaction = async (
     const mainTxDocRef = doc(mainTxCol);
     const dateStr = new Date(now).toISOString().split('T')[0];
     
+    let mainTxType: any = 'EXPENSE';
+    if (scenario === 'SALES') mainTxType = 'SALES';
+    if (scenario === 'SALES_RETURN') mainTxType = 'SALES_RETURN';
+    if (scenario === 'PURCHASE_RETURN') mainTxType = 'PURCHASE_RETURN';
+
+    let mainTxAmount = params.price * params.qty;
+    // In main ledger: 
+    // Sales/SalesReturn is positive for revenue, negative for return.
+    // Expense/PurchaseReturn is negative for expense, positive for return (money back).
+    if (scenario === 'STOCK_IN') mainTxAmount = -mainTxAmount;
+    if (scenario === 'SALES_RETURN') mainTxAmount = -mainTxAmount;
+    // PURCHASE_RETURN remains positive (money back).
+
+    let actionLabel = '進貨';
+    if (scenario === 'SALES') actionLabel = '售出';
+    if (scenario === 'SALES_RETURN') actionLabel = '銷售退貨';
+    if (scenario === 'PURCHASE_RETURN') actionLabel = '退貨給供應商';
+
     transaction.set(mainTxDocRef, {
       userId: 'SYSTEM',
       userName: '零售/進貨系統',
-      type: scenario === 'STOCK_IN' ? 'EXPENSE' : 'SALES',
+      type: mainTxType,
       category: params.accountingCategory,
-      amount: scenario === 'STOCK_IN' ? -(params.price * params.qty) : (params.price * params.qty),
-      description: `[庫存系統] ${scenario === 'STOCK_IN' ? '進貨' : '售出'}: ${productData.itemName} x ${params.qty}`,
+      amount: mainTxAmount,
+      description: `[庫存系統] ${actionLabel}: ${productData.itemName} x ${params.qty}`,
       date: dateStr,
       createdAt: now,
       paymentMethod: 'CASH', 
@@ -161,6 +196,8 @@ export const handleInventoryTransaction = async (
     });
   });
 };
+
+
 
 /**
  * 任務四：進銷存連動沖銷 (Revert / Delete)

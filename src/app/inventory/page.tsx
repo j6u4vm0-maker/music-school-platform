@@ -67,9 +67,10 @@ export default function InventoryPage() {
           brands={brands} isLoading={isLoading} canEdit={canEdit}
           categoriesList={categoriesList} originsList={originsList} materialsList={materialsList}
           openTxModal={openTxModal} openProductModal={openProductModal}
-          handleDeleteProduct={handleDeleteProduct} handleExport={handleExport}
+          handleExport={handleExport}
           handleImportClick={() => fileInputRef.current?.click()}
         />
+
         <input type="file" ref={fileInputRef} onChange={handleImportUI} hidden accept=".xlsx, .xls" />
 
         {canEdit && (
@@ -94,9 +95,10 @@ export default function InventoryPage() {
       <ProductModal 
         isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)}
         editingProduct={editingProduct} setEditingProduct={setEditingProduct}
-        onSubmit={handleProductSubmit} isSubmitting={isSubmitting}
+        onSubmit={handleProductSubmit} onDelete={handleDeleteProduct} isSubmitting={isSubmitting}
         categoriesList={categoriesList} brands={brands}
       />
+
 
       <InventoryTransactionModal 
         isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}

@@ -16,8 +16,10 @@ export interface Product {
 export interface InventoryTransaction {
   id?: string;
   productId: string;
-  type: 'IN_STOCK' | 'OUT_STOCK';
+  type: 'IN_STOCK' | 'OUT_STOCK' | 'RETURN_IN' | 'RETURN_OUT';
+
   qtyChange: number;
   operator: string;
   timestamp: number;
 }
+

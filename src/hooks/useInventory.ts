@@ -21,7 +21,7 @@ export const useInventory = (profileName: string) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | Partial<Product> | null>(null);
-  const [modalType, setModalType] = useState<'STOCK_IN' | 'SALES' | null>(null);
+  const [modalType, setModalType] = useState<'STOCK_IN' | 'SALES' | 'SALES_RETURN' | 'PURCHASE_RETURN' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [txQty, setTxQty] = useState(1);
   const [txPrice, setTxPrice] = useState(0); 
@@ -38,6 +38,7 @@ export const useInventory = (profileName: string) => {
   const [batchCategory, setBatchCategory] = useState('');
   const [batchBrand, setBatchBrand] = useState('');
 
+
   useEffect(() => {
     const unsubProducts = subscribeToProducts(setProducts);
     const unsubLedgers = subscribeToFinancialLedgers(100, setLedgers);
@@ -50,13 +51,15 @@ export const useInventory = (profileName: string) => {
     };
   }, []);
 
-  const openTxModal = (product: Product, type: 'STOCK_IN' | 'SALES') => {
+  const openTxModal = (product: Product, type: 'STOCK_IN' | 'SALES' | 'SALES_RETURN' | 'PURCHASE_RETURN') => {
     setSelectedProduct(product);
     setModalType(type);
     setTxQty(1);
-    setTxPrice(type === 'STOCK_IN' ? product.costPrice : product.sellPrice);
+    const defaultPrice = (type === 'STOCK_IN' || type === 'PURCHASE_RETURN') ? product.costPrice : product.sellPrice;
+    setTxPrice(defaultPrice);
     setIsModalOpen(true);
   };
+
 
   const submitTransaction = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -81,6 +84,7 @@ export const useInventory = (profileName: string) => {
     }
     setIsSubmitting(false);
   };
+
 
   const openProductModal = (product?: Product) => {
     if (product) {
